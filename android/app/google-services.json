@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "385529023099",
+    "project_id": "mycare-sec25",
+    "storage_bucket": "mycare-sec25.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:385529023099:android:e239cb1d275e17b254b0de",
+        "android_client_info": {
+          "package_name": "com.example.mycare"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD0N3tWOfw6wQgxGmtwGPx8N66C3iSoX7s"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
