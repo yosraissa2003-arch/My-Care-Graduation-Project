@@ -8,7 +8,6 @@ import 'health_history_reports_screen.dart';
 import 'package:mycare/screens/notifications_screen.dart';
 import 'package:mycare/screens/medication_list_screen.dart';
 
-
 import 'profile_settings_screen.dart';
 
 class HomeScreen extends StatelessWidget {
@@ -144,30 +143,27 @@ class HomeScreen extends StatelessWidget {
               children: [
                 Expanded(
                   child:
-                  
-                  //  _serviceCard(
-                  //   title: 'أدويتي',
-                  //   icon: Icons.medication_liquid_rounded,
-                  //   color: warningColor,
-                  //   bgColor: const Color(0xffFFF1E7),
-                  //   onTap: () {},
-                  // ),
-
-_serviceCard(
-  title: 'أدويتي',
-  icon: Icons.medication_liquid_rounded,
-  color: warningColor,
-  bgColor: const Color(0xffFFF1E7),
-  onTap: () {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => const MedicationListScreen(),
-      ),
-    );
-  },
-),
-                  
+                      //  _serviceCard(
+                      //   title: 'أدويتي',
+                      //   icon: Icons.medication_liquid_rounded,
+                      //   color: warningColor,
+                      //   bgColor: const Color(0xffFFF1E7),
+                      //   onTap: () {},
+                      // ),
+                      _serviceCard(
+                        title: 'أدويتي',
+                        icon: Icons.medication_liquid_rounded,
+                        color: warningColor,
+                        bgColor: const Color(0xffFFF1E7),
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const MedicationListScreen(),
+                            ),
+                          );
+                        },
+                      ),
                 ),
                 const SizedBox(width: 16),
                 Expanded(
@@ -208,7 +204,7 @@ _serviceCard(
 
             const SizedBox(height: 24),
 
-            _sosButton(),
+            _sosButton(context, uid, user),
           ],
         ),
       ),
@@ -397,11 +393,7 @@ _serviceCard(
               const CircleAvatar(
                 radius: 34,
                 backgroundColor: Colors.white,
-                child: Icon(
-                  Icons.verified_user,
-                  color: successColor,
-                  size: 38,
-                ),
+                child: Icon(Icons.verified_user, color: successColor, size: 38),
               ),
               const SizedBox(width: 16),
               Expanded(
@@ -495,11 +487,7 @@ _serviceCard(
               const CircleAvatar(
                 radius: 30,
                 backgroundColor: softGreen,
-                child: Icon(
-                  Icons.elderly,
-                  color: successColor,
-                  size: 34,
-                ),
+                child: Icon(Icons.elderly, color: successColor, size: 34),
               ),
               const SizedBox(width: 16),
               Expanded(
@@ -717,8 +705,9 @@ _serviceCard(
                     .doc(docId)
                     .snapshots(),
                 builder: (context, snapshot) {
-                  final currentTaken =
-                      snapshot.data?.data()?['taken'] == true ? true : taken;
+                  final currentTaken = snapshot.data?.data()?['taken'] == true
+                      ? true
+                      : taken;
 
                   return InkWell(
                     onTap: () async {
@@ -751,8 +740,7 @@ _serviceCard(
                           Text(
                             currentTaken ? 'تم أخذه' : 'لم يتم أخذه',
                             style: TextStyle(
-                              color:
-                                  currentTaken ? successColor : errorColor,
+                              color: currentTaken ? successColor : errorColor,
                               fontSize: 16,
                               fontFamily: 'Cairo',
                               fontWeight: FontWeight.bold,
@@ -829,11 +817,65 @@ _serviceCard(
     );
   }
 
-  Widget _sosButton() {
+  Widget _sosButton(
+    BuildContext context,
+    String uid,
+    Map<String, dynamic> user,
+  ) {
     return SizedBox(
       height: 72,
       child: ElevatedButton.icon(
-        onPressed: () {},
+        onPressed: () async {
+          final patientName = (user['fullName'] ?? user['name'] ?? 'المريض')
+              .toString();
+
+          final emergencyPhone = (user['emergencyContact'] ?? '').toString();
+
+          String caregiverId = '';
+
+          if (emergencyPhone.isNotEmpty) {
+            final caregiverQuery = await FirebaseFirestore.instance
+                .collection('users')
+                .where('phone', isEqualTo: emergencyPhone)
+                .limit(1)
+                .get();
+
+            if (caregiverQuery.docs.isNotEmpty) {
+              caregiverId = caregiverQuery.docs.first.id;
+            }
+          }
+
+          await FirebaseFirestore.instance.collection('sosAlerts').add({
+            'userId': uid,
+            'caregiverId': caregiverId,
+            'patientName': patientName,
+            'emergencyPhone': emergencyPhone,
+            'source': 'manual',
+            'status': 'active',
+            'message': 'المريض $patientName يحتاج مساعدة فورية',
+            'createdAt': Timestamp.now(),
+          });
+
+          await FirebaseFirestore.instance.collection('notifications').add({
+            'title': 'تنبيه طوارئ SOS',
+            'message': 'المريض $patientName يحتاج مساعدة فورية',
+            'type': 'sos',
+            'time': 'طوارئ',
+            'isRead': false,
+            'createdAt': Timestamp.now(),
+          });
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              backgroundColor: errorColor,
+              content: Text(
+                'تم إرسال تنبيه الطوارئ للمرافق',
+                textAlign: TextAlign.right,
+                style: TextStyle(fontSize: 18, fontFamily: 'Cairo'),
+              ),
+            ),
+          );
+        },
         icon: const Icon(
           Icons.phone_in_talk_rounded,
           color: Colors.white,
@@ -858,83 +900,73 @@ _serviceCard(
     );
   }
 
-
-Widget _bottomNavigation(BuildContext context) {
-  return Container(
-    padding: const EdgeInsets.only(top: 8, bottom: 8),
-    decoration: BoxDecoration(
-      color: cardColor,
-      boxShadow: [
-        BoxShadow(
-          color: Colors.black.withOpacity(0.07),
-          blurRadius: 18,
-          offset: const Offset(0, -5),
+  Widget _bottomNavigation(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.only(top: 8, bottom: 8),
+      decoration: BoxDecoration(
+        color: cardColor,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.07),
+            blurRadius: 18,
+            offset: const Offset(0, -5),
+          ),
+        ],
+        borderRadius: const BorderRadius.only(
+          topLeft: Radius.circular(26),
+          topRight: Radius.circular(26),
         ),
-      ],
-      borderRadius: const BorderRadius.only(
-        topLeft: Radius.circular(26),
-        topRight: Radius.circular(26),
       ),
-    ),
-    child: BottomNavigationBar(
-      currentIndex: 0,
-      elevation: 0,
-      backgroundColor: Colors.transparent,
-      selectedItemColor: primaryColor,
-      unselectedItemColor: secondaryTextColor,
-      selectedFontSize: 16,
-      unselectedFontSize: 15,
-      type: BottomNavigationBarType.fixed,
+      child: BottomNavigationBar(
+        currentIndex: 0,
+        elevation: 0,
+        backgroundColor: Colors.transparent,
+        selectedItemColor: primaryColor,
+        unselectedItemColor: secondaryTextColor,
+        selectedFontSize: 16,
+        unselectedFontSize: 15,
+        type: BottomNavigationBarType.fixed,
 
-      onTap: (index) {
-        // الرئيسية
-        if (index == 0) {
-          return;
-        }
+        onTap: (index) {
+          // الرئيسية
+          if (index == 0) {
+            return;
+          }
 
-        // التنبيهات
-        if (index == 1) {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => const NotificationsScreen(),
-            ),
-          );
-        }
+          // التنبيهات
+          if (index == 1) {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const NotificationsScreen()),
+            );
+          }
 
-        // حسابي
-        if (index == 2) {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => const ProfileSettingsScreen(),
-            ),
-          );
-        }
-      },
+          // حسابي
+          if (index == 2) {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const ProfileSettingsScreen()),
+            );
+          }
+        },
 
-      items: const [
-        BottomNavigationBarItem(
-          icon: Icon(Icons.home_rounded, size: 32),
-          label: 'الرئيسية',
-        ),
-        BottomNavigationBarItem(
-          icon: Icon(Icons.notifications_active_outlined, size: 30),
-          label: 'التنبيهات',
-        ),
-        BottomNavigationBarItem(
-          icon: Icon(Icons.person_outline_rounded, size: 30),
-          label: 'حسابي',
-        ),
-      ],
-    ),
-  );
-}
-
-
-
-
-
+        items: const [
+          BottomNavigationBarItem(
+            icon: Icon(Icons.home_rounded, size: 32),
+            label: 'الرئيسية',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.notifications_active_outlined, size: 30),
+            label: 'التنبيهات',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.person_outline_rounded, size: 30),
+            label: 'حسابي',
+          ),
+        ],
+      ),
+    );
+  }
 
   int _toInt(dynamic value) {
     if (value == null) return 0;

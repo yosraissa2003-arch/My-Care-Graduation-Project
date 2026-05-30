@@ -13,7 +13,7 @@ class NotificationsScreen extends StatelessWidget {
       case 'sos':
         return Icons.sos;
       default:
-        return Icons.notifications;
+        return Icons.notifications_rounded;
     }
   }
 
@@ -43,6 +43,16 @@ class NotificationsScreen extends StatelessWidget {
     if (hour == 0) hour = 12;
 
     return '${hour.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')} $period';
+  }
+
+  void openRelatedScreen(BuildContext context, String type) {
+    if (type == 'medication') {
+      Navigator.pushNamed(context, '/medication-list');
+    } else if (type == 'warning') {
+      Navigator.pushNamed(context, '/health-monitoring');
+    } else if (type == 'sos') {
+      Navigator.pushNamed(context, '/sos');
+    }
   }
 
   @override
@@ -111,11 +121,17 @@ class NotificationsScreen extends StatelessWidget {
               itemBuilder: (context, index) {
                 final data = notifications[index].data();
 
-                return NotificationCard(
-                  title: data['title'] ?? 'تنبيه',
-                  message: data['message'] ?? '',
-                  time: data['time'] ?? formatTime(data['createdAt']),
-                  type: data['type'] ?? 'general',
+                final String type = data['type'] ?? 'general';
+
+                return InkWell(
+                  borderRadius: BorderRadius.circular(22),
+                  onTap: () => openRelatedScreen(context, type),
+                  child: NotificationCard(
+                    title: data['title'] ?? 'تنبيه',
+                    message: data['message'] ?? '',
+                    time: data['time'] ?? formatTime(data['createdAt']),
+                    type: type,
+                  ),
                 );
               },
             );
@@ -166,6 +182,19 @@ class NotificationCard extends StatelessWidget {
     }
   }
 
+  String getTypeLabel() {
+    switch (type) {
+      case 'medication':
+        return 'تنبيه دواء';
+      case 'warning':
+        return 'تنبيه صحي / AI';
+      case 'sos':
+        return 'تنبيه طوارئ';
+      default:
+        return 'تنبيه عام';
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final color = getColor();
@@ -195,13 +224,21 @@ class NotificationCard extends StatelessWidget {
             ),
             child: Icon(getIcon(), color: color, size: 32),
           ),
-
           const SizedBox(width: 16),
-
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                Text(
+                  getTypeLabel(),
+                  textAlign: TextAlign.right,
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w900,
+                    color: color,
+                  ),
+                ),
+                const SizedBox(height: 5),
                 Text(
                   title,
                   textAlign: TextAlign.right,
@@ -211,9 +248,7 @@ class NotificationCard extends StatelessWidget {
                     color: Colors.black,
                   ),
                 ),
-
                 const SizedBox(height: 8),
-
                 Text(
                   message,
                   textAlign: TextAlign.right,
@@ -224,9 +259,7 @@ class NotificationCard extends StatelessWidget {
                     height: 1.5,
                   ),
                 ),
-
                 const SizedBox(height: 10),
-
                 Text(
                   time,
                   textAlign: TextAlign.right,
