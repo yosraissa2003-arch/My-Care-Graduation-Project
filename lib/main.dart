@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 
-import 'screens/login_screen.dart';
+import 'screens/splash_screen.dart';
 
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   await Firebase.initializeApp();
@@ -29,7 +29,7 @@ class MyCareApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       title: 'MyCare',
       theme: ThemeData(fontFamily: 'Cairo'),
-      home: const LoginScreen(),
+      home: const SplashScreen(),
     );
   }
 }
