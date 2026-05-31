@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:geolocator/geolocator.dart';
 
 import 'medical_info_screen.dart';
 import 'add_health_data_screen.dart';
@@ -817,6 +818,52 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
+  Future<Position?> _getCurrentPosition(BuildContext context) async {
+    try {
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            backgroundColor: warningColor,
+            content: Text(
+              'يرجى تفعيل خدمة الموقع من الهاتف',
+              textAlign: TextAlign.right,
+              style: TextStyle(fontSize: 18, fontFamily: 'Cairo'),
+            ),
+          ),
+        );
+        return null;
+      }
+
+      LocationPermission permission = await Geolocator.checkPermission();
+
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            backgroundColor: warningColor,
+            content: Text(
+              'لم يتم السماح بالموقع، سيتم إرسال SOS بدون موقع',
+              textAlign: TextAlign.right,
+              style: TextStyle(fontSize: 18, fontFamily: 'Cairo'),
+            ),
+          ),
+        );
+        return null;
+      }
+
+      return await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
   Widget _sosButton(
     BuildContext context,
     String uid,
@@ -845,18 +892,25 @@ class HomeScreen extends StatelessWidget {
             }
           }
 
+          final position = await _getCurrentPosition(context);
+
           await FirebaseFirestore.instance.collection('sosAlerts').add({
             'userId': uid,
             'caregiverId': caregiverId,
             'patientName': patientName,
+            'patientPhone': user['phone'] ?? '',
             'emergencyPhone': emergencyPhone,
             'source': 'manual',
             'status': 'active',
             'message': 'المريض $patientName يحتاج مساعدة فورية',
+            'latitude': position?.latitude,
+            'longitude': position?.longitude,
             'createdAt': Timestamp.now(),
           });
 
           await FirebaseFirestore.instance.collection('notifications').add({
+            'userId': uid,
+            'caregiverId': caregiverId,
             'title': 'تنبيه طوارئ SOS',
             'message': 'المريض $patientName يحتاج مساعدة فورية',
             'type': 'sos',
@@ -923,44 +977,61 @@ class HomeScreen extends StatelessWidget {
         backgroundColor: Colors.transparent,
         selectedItemColor: primaryColor,
         unselectedItemColor: secondaryTextColor,
-        selectedFontSize: 16,
-        unselectedFontSize: 15,
+        selectedFontSize: 13,
+        unselectedFontSize: 12,
         type: BottomNavigationBarType.fixed,
-
         onTap: (index) {
-          // الرئيسية
           if (index == 0) {
             return;
           }
 
-          // التنبيهات
           if (index == 1) {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const AddHealthDataScreen()),
+            );
+          }
+
+          if (index == 2) {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => HealthHistoryReportsScreen()),
+            );
+          }
+
+          if (index == 3) {
             Navigator.push(
               context,
               MaterialPageRoute(builder: (_) => const NotificationsScreen()),
             );
           }
 
-          // حسابي
-          if (index == 2) {
+          if (index == 4) {
             Navigator.push(
               context,
               MaterialPageRoute(builder: (_) => const ProfileSettingsScreen()),
             );
           }
         },
-
         items: const [
           BottomNavigationBarItem(
-            icon: Icon(Icons.home_rounded, size: 32),
+            icon: Icon(Icons.home_rounded, size: 30),
             label: 'الرئيسية',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.notifications_active_outlined, size: 30),
+            icon: Icon(Icons.monitor_heart_rounded, size: 28),
+            label: 'صحتي',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.description_rounded, size: 28),
+            label: 'تقاريري',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.notifications_active_outlined, size: 28),
             label: 'التنبيهات',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.person_outline_rounded, size: 30),
+            icon: Icon(Icons.person_outline_rounded, size: 28),
             label: 'حسابي',
           ),
         ],
