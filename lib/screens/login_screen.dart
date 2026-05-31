@@ -2,8 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+
 import 'package:mycare/screens/signup/signup_step1.dart';
 import 'package:mycare/screens/home_screen.dart';
+import 'package:mycare/screens/caregiver_dashboard_screen.dart';
+import 'package:mycare/screens/doctor_dashboard_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -96,6 +99,22 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
+  Widget getHomeScreenByRole(String role) {
+    if (role == 'مريض') {
+      return HomeScreen();
+    }
+
+    if (role == 'مرافق') {
+      return const CaregiverDashboardScreen();
+    }
+
+    if (role == 'طبيب') {
+      return const DoctorDashboardScreen();
+    }
+
+    return HomeScreen();
+  }
+
   Future<void> login() async {
     if (isLoading) return;
 
@@ -110,10 +129,7 @@ class _LoginScreenState extends State<LoginScreen> {
     final normalizedPhone = normalizePhoneNumber(phone);
 
     if (normalizedPhone == null) {
-      showMessage(
-        "رقم الهاتف غير صحيح. يجب أن يبدأ بـ 059 أو 056 أو 050 أو 052 أو 053 أو 054 أو 055 أو 058",
-        color: errorColor,
-      );
+      showMessage("رقم الهاتف غير صحيح", color: errorColor);
       return;
     }
 
@@ -145,16 +161,19 @@ class _LoginScreenState extends State<LoginScreen> {
         return;
       }
 
-      showMessage("تم تسجيل الدخول بنجاح", color: successColor);
+      final data = userDoc.data();
+      final String role = (data?['role'] ?? '').toString().trim();
+
+      if (role.isEmpty) {
+        showMessage("نوع الحساب غير موجود في Firebase", color: errorColor);
+        return;
+      }
 
       if (!mounted) return;
 
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(
-          builder: (_) => HomeScreen(),
-
-        ),
+        MaterialPageRoute(builder: (_) => getHomeScreenByRole(role)),
       );
     } on FirebaseAuthException catch (e) {
       switch (e.code) {
@@ -329,9 +348,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     onPressed: () {
                       Navigator.push(
                         context,
-                        MaterialPageRoute(
-                          builder: (_) => const SignUpStep1(),
-                        ),
+                        MaterialPageRoute(builder: (_) => const SignUpStep1()),
                       );
                     },
                     icon: const Icon(Icons.person_add, color: primaryColor),

@@ -27,40 +27,50 @@ class SignUpStep2 extends StatefulWidget {
 }
 
 class _SignUpStep2State extends State<SignUpStep2> {
-  // ================= COLORS =================
-
   static const Color primaryColor = Color(0xFF1E3A5F);
   static const Color backgroundColor = Color(0xFFF7F8FA);
   static const Color cardColor = Color(0xFFFFFFFF);
   static const Color textColor = Color(0xFF1F2937);
   static const Color secondaryTextColor = Color(0xFF4B5563);
   static const Color warningColor = Color(0xFFED6C02);
-  static const Color successColor = Color(0xFF2E7D32);
   static const Color errorColor = Color(0xFFD32F2F);
 
-  // ================= CONTROLLERS =================
+  final TextEditingController linkPhoneController = TextEditingController();
+  final TextEditingController doctorPhoneController = TextEditingController();
+  final TextEditingController inviteCodeController = TextEditingController();
 
-  final TextEditingController linkPhoneController =
-      TextEditingController();
+  final TextEditingController specialtyController = TextEditingController();
+  final TextEditingController workplaceController = TextEditingController();
+  final TextEditingController licenseNumberController = TextEditingController();
 
-  final TextEditingController inviteCodeController =
-      TextEditingController();
+  String? doctorSpecialty;
 
-  // ================= DISPOSE =================
+  final List<String> specialties = [
+    'طب عام',
+    'باطنية',
+    'قلب',
+    'أعصاب',
+    'سكري وغدد',
+    'طوارئ',
+    'جراحة',
+    'عظام',
+    'كلى',
+    'صدرية',
+    'أخرى',
+  ];
 
   @override
   void dispose() {
     linkPhoneController.dispose();
+    doctorPhoneController.dispose();
     inviteCodeController.dispose();
+    specialtyController.dispose();
+    workplaceController.dispose();
+    licenseNumberController.dispose();
     super.dispose();
   }
 
-  // ================= MESSAGE =================
-
-  void showMessage(
-    String message, {
-    Color color = primaryColor,
-  }) async {
+  void showMessage(String message, {Color color = primaryColor}) async {
     await SystemSound.play(SystemSoundType.alert);
     HapticFeedback.mediumImpact();
 
@@ -71,9 +81,7 @@ class _SignUpStep2State extends State<SignUpStep2> {
         backgroundColor: color,
         behavior: SnackBarBehavior.floating,
         margin: const EdgeInsets.all(20),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         content: Text(
           message,
           textAlign: TextAlign.right,
@@ -92,16 +100,39 @@ class _SignUpStep2State extends State<SignUpStep2> {
     );
   }
 
-  // ================= NEXT =================
-
   void goNext() {
-    if (linkPhoneController.text.trim().isEmpty &&
-        inviteCodeController.text.trim().isEmpty) {
-      showMessage(
-        "أدخلي رقم الهاتف أو كود الدعوة",
-        color: warningColor,
-      );
-      return;
+    if (widget.role == "مريض") {
+      if (linkPhoneController.text.trim().isEmpty &&
+          inviteCodeController.text.trim().isEmpty) {
+        showMessage("أدخلي رقم المرافق أو كود الدعوة", color: warningColor);
+        return;
+      }
+    }
+
+    if (widget.role == "مرافق") {
+      if (linkPhoneController.text.trim().isEmpty &&
+          inviteCodeController.text.trim().isEmpty) {
+        showMessage("أدخلي رقم المريض أو كود الدعوة", color: warningColor);
+        return;
+      }
+    }
+
+    if (widget.role == "طبيب") {
+      if (doctorSpecialty == null) {
+        showMessage("اختاري تخصص الطبيب", color: errorColor);
+        return;
+      }
+
+      if (doctorSpecialty == "أخرى" &&
+          specialtyController.text.trim().isEmpty) {
+        showMessage("اكتبي التخصص", color: errorColor);
+        return;
+      }
+
+      if (workplaceController.text.trim().isEmpty) {
+        showMessage("مكان العمل مطلوب", color: errorColor);
+        return;
+      }
     }
 
     Navigator.push(
@@ -115,18 +146,18 @@ class _SignUpStep2State extends State<SignUpStep2> {
           age: widget.age,
           gender: widget.gender,
           relation: widget.relation,
-
-          linkedPhone:
-              linkPhoneController.text.trim(),
-
-          inviteCode:
-              inviteCodeController.text.trim(),
+          linkedPhone: linkPhoneController.text.trim(),
+          doctorPhone: doctorPhoneController.text.trim(),
+          inviteCode: inviteCodeController.text.trim(),
+          doctorSpecialty: doctorSpecialty == "أخرى"
+              ? specialtyController.text.trim()
+              : doctorSpecialty ?? "",
+          doctorWorkplace: workplaceController.text.trim(),
+          doctorLicenseNumber: licenseNumberController.text.trim(),
         ),
       ),
     );
   }
-
-  // ================= INPUT STYLE =================
 
   InputDecoration inputDecoration({
     required String hint,
@@ -139,14 +170,10 @@ class _SignUpStep2State extends State<SignUpStep2> {
         fontFamily: 'Cairo',
         color: secondaryTextColor,
       ),
-      prefixIcon: Icon(
-        icon,
-        color: primaryColor,
-      ),
+      prefixIcon: Icon(icon, color: primaryColor),
       filled: true,
       fillColor: cardColor,
-      contentPadding:
-          const EdgeInsets.symmetric(horizontal: 16),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(16),
         borderSide: BorderSide.none,
@@ -154,14 +181,11 @@ class _SignUpStep2State extends State<SignUpStep2> {
     );
   }
 
-  // ================= FIELD =================
-
   Widget buildField({
     required TextEditingController controller,
     required String hint,
     required IconData icon,
-    TextInputType keyboardType =
-        TextInputType.text,
+    TextInputType keyboardType = TextInputType.text,
   }) {
     return SizedBox(
       height: 56,
@@ -173,20 +197,16 @@ class _SignUpStep2State extends State<SignUpStep2> {
           fontFamily: 'Cairo',
           color: textColor,
         ),
-        decoration: inputDecoration(
-          hint: hint,
-          icon: icon,
-        ),
+        decoration: inputDecoration(hint: hint, icon: icon),
       ),
     );
   }
 
-  // ================= BUILD =================
-
   @override
   Widget build(BuildContext context) {
-    final bool isPatient =
-        widget.role == "مريض";
+    final bool isPatient = widget.role == "مريض";
+    final bool isCaregiver = widget.role == "مرافق";
+    final bool isDoctor = widget.role == "طبيب";
 
     return Directionality(
       textDirection: TextDirection.rtl,
@@ -196,12 +216,9 @@ class _SignUpStep2State extends State<SignUpStep2> {
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(20),
             child: Column(
-              crossAxisAlignment:
-                  CrossAxisAlignment.stretch,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 const SizedBox(height: 16),
-
-                // ================= TITLE =================
 
                 const Text(
                   'رعايتي ❤️',
@@ -216,10 +233,10 @@ class _SignUpStep2State extends State<SignUpStep2> {
 
                 const SizedBox(height: 8),
 
-                const Text(
-                  'ربط الحسابات',
+                Text(
+                  isDoctor ? 'بيانات الطبيب' : 'ربط الحسابات',
                   textAlign: TextAlign.center,
-                  style: TextStyle(
+                  style: const TextStyle(
                     fontSize: 22,
                     fontFamily: 'Cairo',
                     fontWeight: FontWeight.bold,
@@ -230,9 +247,7 @@ class _SignUpStep2State extends State<SignUpStep2> {
                 const SizedBox(height: 4),
 
                 Text(
-                  isPatient
-                      ? 'الخطوة 2 من 5'
-                      : 'الخطوة 2 من 4',
+                  isPatient ? 'الخطوة 2 من 5' : 'الخطوة 2 من 4',
                   textAlign: TextAlign.center,
                   style: const TextStyle(
                     fontSize: 16,
@@ -243,35 +258,28 @@ class _SignUpStep2State extends State<SignUpStep2> {
 
                 const SizedBox(height: 24),
 
-                // ================= PROGRESS =================
-
                 LinearProgressIndicator(
                   value: isPatient ? 0.4 : 0.5,
                   minHeight: 8,
-                  borderRadius:
-                      BorderRadius.circular(20),
-                  backgroundColor:
-                      Colors.grey.shade300,
+                  borderRadius: BorderRadius.circular(20),
+                  backgroundColor: Colors.grey.shade300,
                   color: primaryColor,
                 ),
 
                 const SizedBox(height: 32),
 
-                // ================= DESCRIPTION CARD =================
-
                 Container(
-                  padding:
-                      const EdgeInsets.all(20),
+                  padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
                     color: cardColor,
-                    borderRadius:
-                        BorderRadius.circular(
-                            20),
+                    borderRadius: BorderRadius.circular(20),
                   ),
                   child: Text(
                     isPatient
-                        ? 'أضيفي رقم هاتف المعتني أو كود الدعوة للربط مع شخص يتابع حالتك الصحية.'
-                        : 'أضيفي رقم هاتف المريض أو كود الدعوة لبدء المتابعة واستقبال التنبيهات.',
+                        ? 'أضيفي رقم هاتف المرافق أو كود الدعوة، ويمكنك إضافة رقم الطبيب اختياريًا لمتابعة التقارير والحالات الحرجة.'
+                        : isCaregiver
+                        ? 'أضيفي رقم هاتف المريض أو كود الدعوة لبدء المتابعة واستقبال التنبيهات.'
+                        : 'أدخلي بيانات الطبيب ليتمكن المرضى من ربط حساباتهم معك ومشاركة التقارير الصحية.',
                     textAlign: TextAlign.center,
                     style: const TextStyle(
                       fontSize: 18,
@@ -284,63 +292,104 @@ class _SignUpStep2State extends State<SignUpStep2> {
 
                 const SizedBox(height: 24),
 
-                // ================= PHONE =================
+                if (!isDoctor) ...[
+                  buildField(
+                    controller: linkPhoneController,
+                    hint: isPatient ? 'رقم هاتف المرافق' : 'رقم هاتف المريض',
+                    icon: Icons.phone,
+                    keyboardType: TextInputType.phone,
+                  ),
 
-                buildField(
-                  controller:
-                      linkPhoneController,
-                  hint: isPatient
-                      ? 'رقم هاتف المعتني'
-                      : 'رقم هاتف المريض',
-                  icon: Icons.phone,
-                  keyboardType:
-                      TextInputType.phone,
-                ),
+                  const SizedBox(height: 16),
 
-                const SizedBox(height: 16),
+                  if (isPatient) ...[
+                    buildField(
+                      controller: doctorPhoneController,
+                      hint: 'رقم هاتف الطبيب (اختياري)',
+                      icon: Icons.medical_services,
+                      keyboardType: TextInputType.phone,
+                    ),
+                    const SizedBox(height: 16),
+                  ],
 
-                // ================= INVITE CODE =================
+                  buildField(
+                    controller: inviteCodeController,
+                    hint: 'كود الدعوة (اختياري)',
+                    icon: Icons.qr_code,
+                  ),
+                ],
 
-                buildField(
-                  controller:
-                      inviteCodeController,
-                  hint: 'كود الدعوة (اختياري)',
-                  icon: Icons.qr_code,
-                ),
+                if (isDoctor) ...[
+                  DropdownButtonFormField<String>(
+                    initialValue: doctorSpecialty,
+                    decoration: inputDecoration(
+                      hint: 'تخصص الطبيب',
+                      icon: Icons.medical_services,
+                    ),
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontFamily: 'Cairo',
+                      color: textColor,
+                    ),
+                    items: specialties
+                        .map((s) => DropdownMenuItem(value: s, child: Text(s)))
+                        .toList(),
+                    onChanged: (value) {
+                      setState(() {
+                        doctorSpecialty = value;
+                      });
+                    },
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  if (doctorSpecialty == "أخرى") ...[
+                    buildField(
+                      controller: specialtyController,
+                      hint: 'اكتبي التخصص',
+                      icon: Icons.edit,
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+
+                  buildField(
+                    controller: workplaceController,
+                    hint: 'مكان العمل / العيادة / المستشفى',
+                    icon: Icons.local_hospital,
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  buildField(
+                    controller: licenseNumberController,
+                    hint: 'رقم مزاولة المهنة (اختياري)',
+                    icon: Icons.badge,
+                  ),
+                ],
 
                 const SizedBox(height: 32),
 
-                // ================= INFO =================
-
                 Container(
-                  padding:
-                      const EdgeInsets.all(20),
+                  padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
-                    color: Colors.orange
-                        .withOpacity(0.08),
-                    borderRadius:
-                        BorderRadius.circular(
-                            20),
+                    color: Colors.orange.withOpacity(0.08),
+                    borderRadius: BorderRadius.circular(20),
                   ),
                   child: Row(
                     children: [
-                      const Icon(
-                        Icons.info_outline,
-                        color: warningColor,
-                      ),
+                      const Icon(Icons.info_outline, color: warningColor),
                       const SizedBox(width: 12),
                       Expanded(
                         child: Text(
                           isPatient
-                              ? 'سيتمكن المعتني من متابعة حالتك الصحية واستقبال تنبيهات SOS.'
-                              : 'سيصلك تنبيه عند احتياج المريض للمساعدة أو عند وجود حالة طارئة.',
-                          style:
-                              const TextStyle(
+                              ? 'سيتمكن المرافق من متابعة حالتك واستقبال تنبيهات SOS، والطبيب سيشاهد التقارير والحالات الحرجة فقط.'
+                              : isCaregiver
+                              ? 'سيصلك تنبيه عند احتياج المريض للمساعدة أو عند وجود حالة طارئة.'
+                              : 'سيتم إنشاء كود طبيب خاص بك لاستخدامه في ربط المرضى لاحقًا.',
+                          style: const TextStyle(
                             fontSize: 16,
-                            fontFamily:
-                                'Cairo',
-                            color:
-                                secondaryTextColor,
+                            fontFamily: 'Cairo',
+                            color: secondaryTextColor,
                             height: 1.5,
                           ),
                         ),
@@ -351,36 +400,24 @@ class _SignUpStep2State extends State<SignUpStep2> {
 
                 const SizedBox(height: 40),
 
-                // ================= NEXT BUTTON =================
-
                 SizedBox(
                   height: 56,
-                  child:
-                      ElevatedButton.icon(
+                  child: ElevatedButton.icon(
                     onPressed: goNext,
-                    icon: const Icon(
-                      Icons.arrow_forward,
-                      color: Colors.white,
-                    ),
+                    icon: const Icon(Icons.arrow_forward, color: Colors.white),
                     label: const Text(
                       'التالي',
                       style: TextStyle(
                         fontSize: 18,
                         fontFamily: 'Cairo',
-                        fontWeight:
-                            FontWeight.bold,
+                        fontWeight: FontWeight.bold,
                         color: Colors.white,
                       ),
                     ),
-                    style:
-                        ElevatedButton.styleFrom(
-                      backgroundColor:
-                          primaryColor,
-                      shape:
-                          RoundedRectangleBorder(
-                        borderRadius:
-                            BorderRadius.circular(
-                                16),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: primaryColor,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
                       ),
                     ),
                   ),

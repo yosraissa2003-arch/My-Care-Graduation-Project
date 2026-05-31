@@ -15,11 +15,21 @@ class SignUpStep4 extends StatefulWidget {
   final String relation;
 
   final String linkedPhone;
+  final String doctorPhone;
   final String inviteCode;
 
+  final String doctorSpecialty;
+  final String doctorWorkplace;
+  final String doctorLicenseNumber;
+
   final String diseases;
+  final String diseaseSince;
   final String medicines;
   final String allergy;
+  final String allergyTypes;
+  final String surgeries;
+  final String smokingStatus;
+  final String cigarettesPerDay;
   final String bloodType;
   final String bloodPressure;
   final String sugar;
@@ -38,10 +48,19 @@ class SignUpStep4 extends StatefulWidget {
     required this.gender,
     required this.relation,
     required this.linkedPhone,
+    required this.doctorPhone,
     required this.inviteCode,
+    required this.doctorSpecialty,
+    required this.doctorWorkplace,
+    required this.doctorLicenseNumber,
     required this.diseases,
+    required this.diseaseSince,
     required this.medicines,
     required this.allergy,
+    required this.allergyTypes,
+    required this.surgeries,
+    required this.smokingStatus,
+    required this.cigarettesPerDay,
     required this.bloodType,
     required this.bloodPressure,
     required this.sugar,
@@ -87,9 +106,7 @@ class _SignUpStep4State extends State<SignUpStep4> {
       cleaned = '0${cleaned.substring(3)}';
     }
 
-    if (cleaned.length != 10) {
-      return null;
-    }
+    if (cleaned.length != 10) return null;
 
     if (cleaned.startsWith('059') || cleaned.startsWith('056')) {
       return '970${cleaned.substring(1)}';
@@ -108,7 +125,7 @@ class _SignUpStep4State extends State<SignUpStep4> {
   }
 
   String generateEmailFromPhone(String normalizedPhone) {
-    return "$normalizedPhone@test.com";
+    return '$normalizedPhone@test.com';
   }
 
   Future<void> showMessage(String message, {Color color = primaryColor}) async {
@@ -122,9 +139,7 @@ class _SignUpStep4State extends State<SignUpStep4> {
         backgroundColor: color,
         behavior: SnackBarBehavior.floating,
         margin: const EdgeInsets.all(20),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         content: Text(
           message,
           textAlign: TextAlign.right,
@@ -173,12 +188,17 @@ class _SignUpStep4State extends State<SignUpStep4> {
     if (isLoading) return;
 
     final String? normalizedPhone = normalizePhoneNumber(widget.phone);
-    final String? normalizedEmergency =
-        normalizePhoneNumber(emergencyContactController.text.trim());
+    final String? normalizedEmergency = normalizePhoneNumber(
+      emergencyContactController.text.trim(),
+    );
 
     final String? normalizedLinkedPhone = widget.linkedPhone.trim().isEmpty
         ? ''
         : normalizePhoneNumber(widget.linkedPhone.trim());
+
+    final String? normalizedDoctorPhone = widget.doctorPhone.trim().isEmpty
+        ? ''
+        : normalizePhoneNumber(widget.doctorPhone.trim());
 
     if (normalizedPhone == null) {
       showMessage(
@@ -203,6 +223,11 @@ class _SignUpStep4State extends State<SignUpStep4> {
       return;
     }
 
+    if (widget.doctorPhone.trim().isNotEmpty && normalizedDoctorPhone == null) {
+      showMessage('رقم الطبيب غير صحيح', color: errorColor);
+      return;
+    }
+
     if (!privacyAccepted) {
       showMessage('يجب الموافقة على سياسة الخصوصية', color: warningColor);
       return;
@@ -213,13 +238,14 @@ class _SignUpStep4State extends State<SignUpStep4> {
     try {
       final generatedEmail = generateEmailFromPhone(normalizedPhone);
 
-      final userCredential =
-          await FirebaseAuth.instance.createUserWithEmailAndPassword(
-        email: generatedEmail,
-        password: widget.password.trim(),
-      );
+      final userCredential = await FirebaseAuth.instance
+          .createUserWithEmailAndPassword(
+            email: generatedEmail,
+            password: widget.password.trim(),
+          );
 
       final uid = userCredential.user!.uid;
+      final now = FieldValue.serverTimestamp();
 
       final Map<String, dynamic> userData = {
         'uid': uid,
@@ -228,8 +254,9 @@ class _SignUpStep4State extends State<SignUpStep4> {
         'phone': normalizedPhone,
         'originalPhone': widget.phone.trim(),
         'email': generatedEmail,
-        'createdAt': FieldValue.serverTimestamp(),
+        'createdAt': now,
         'linkedPhone': normalizedLinkedPhone ?? '',
+        'doctorPhone': normalizedDoctorPhone ?? '',
         'inviteCode': widget.inviteCode.trim(),
         'emergencyContact': normalizedEmergency,
         'allowLocation': allowLocation,
@@ -243,8 +270,13 @@ class _SignUpStep4State extends State<SignUpStep4> {
           'gender': widget.gender.trim(),
           'healthProfile': {
             'diseases': widget.diseases.trim(),
+            'diseaseSince': widget.diseaseSince.trim(),
             'medicines': widget.medicines.trim(),
             'allergy': widget.allergy.trim(),
+            'allergyTypes': widget.allergyTypes.trim(),
+            'surgeries': widget.surgeries.trim(),
+            'smokingStatus': widget.smokingStatus.trim(),
+            'cigarettesPerDay': widget.cigarettesPerDay.trim(),
             'bloodType': widget.bloodType.trim(),
             'bloodPressure': widget.bloodPressure.trim(),
             'sugar': widget.sugar.trim(),
@@ -256,12 +288,40 @@ class _SignUpStep4State extends State<SignUpStep4> {
       }
 
       if (widget.role == 'مرافق') {
+        userData.addAll({'relation': widget.relation.trim()});
+      }
+
+      if (widget.role == 'طبيب') {
         userData.addAll({
-          'relation': widget.relation.trim(),
+          'doctorSpecialty': widget.doctorSpecialty.trim(),
+          'doctorWorkplace': widget.doctorWorkplace.trim(),
+          'doctorLicenseNumber': widget.doctorLicenseNumber.trim(),
+          'doctorCode':
+              'DR-${normalizedPhone.substring(normalizedPhone.length - 4)}',
         });
       }
 
-      await FirebaseFirestore.instance.collection('users').doc(uid).set(userData);
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(uid)
+          .set(userData);
+
+      if (widget.role == 'طبيب') {
+        await FirebaseFirestore.instance
+            .collection('doctor_profiles')
+            .doc(uid)
+            .set({
+              'doctorId': uid,
+              'fullName': widget.fullName.trim(),
+              'phone': normalizedPhone,
+              'specialty': widget.doctorSpecialty.trim(),
+              'workplace': widget.doctorWorkplace.trim(),
+              'licenseNumber': widget.doctorLicenseNumber.trim(),
+              'doctorCode':
+                  'DR-${normalizedPhone.substring(normalizedPhone.length - 4)}',
+              'createdAt': now,
+            });
+      }
 
       if ((normalizedLinkedPhone ?? '').isNotEmpty ||
           widget.inviteCode.trim().isNotEmpty) {
@@ -271,8 +331,20 @@ class _SignUpStep4State extends State<SignUpStep4> {
           'linkedPhone': normalizedLinkedPhone ?? '',
           'inviteCode': widget.inviteCode.trim(),
           'status': 'pending',
-          'createdAt': FieldValue.serverTimestamp(),
+          'createdAt': now,
         });
+      }
+
+      if (widget.role == 'مريض' && (normalizedDoctorPhone ?? '').isNotEmpty) {
+        await FirebaseFirestore.instance
+            .collection('doctor_patient_links')
+            .add({
+              'patientId': uid,
+              'patientPhone': normalizedPhone,
+              'doctorPhone': normalizedDoctorPhone ?? '',
+              'status': 'pending',
+              'createdAt': now,
+            });
       }
 
       showMessage('تم إنشاء الحساب بنجاح', color: successColor);
@@ -283,9 +355,7 @@ class _SignUpStep4State extends State<SignUpStep4> {
 
       Navigator.pushAndRemoveUntil(
         context,
-        MaterialPageRoute(
-          builder: (_) => const LoginScreen(),
-        ),
+        MaterialPageRoute(builder: (_) => const LoginScreen()),
         (route) => false,
       );
     } on FirebaseAuthException catch (e) {
@@ -295,9 +365,7 @@ class _SignUpStep4State extends State<SignUpStep4> {
     } catch (_) {
       showMessage('حدث خطأ غير متوقع', color: errorColor);
     } finally {
-      if (mounted) {
-        setState(() => isLoading = false);
-      }
+      if (mounted) setState(() => isLoading = false);
     }
   }
 
@@ -339,10 +407,7 @@ class _SignUpStep4State extends State<SignUpStep4> {
           fontFamily: 'Cairo',
           color: textColor,
         ),
-        decoration: inputDecoration(
-          hint: hint,
-          icon: icon,
-        ),
+        decoration: inputDecoration(hint: hint, icon: icon),
       ),
     );
   }
@@ -476,8 +541,10 @@ class _SignUpStep4State extends State<SignUpStep4> {
                 ),
                 const SizedBox(height: 16),
                 Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: cardColor,
                     borderRadius: BorderRadius.circular(20),
