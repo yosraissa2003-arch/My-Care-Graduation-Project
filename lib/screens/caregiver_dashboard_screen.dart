@@ -2,6 +2,11 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'login_screen.dart';
+
+import '../services/notification_service.dart';
+
+
 
 class CaregiverDashboardScreen extends StatefulWidget {
   const CaregiverDashboardScreen({super.key});
@@ -26,11 +31,56 @@ class _CaregiverDashboardScreenState extends State<CaregiverDashboardScreen> {
   Map<String, dynamic>? patientData;
   String? patientId;
 
-  @override
-  void initState() {
-    super.initState();
-    loadCaregiverAndPatient();
-  }
+  String? lastSosMessageShown;
+
+
+@override
+void initState() {
+  super.initState();
+
+  Future.delayed(const Duration(seconds: 3), () {
+    NotificationService.showNotification(
+      title: 'اختبار',
+      body: 'الإشعارات تعمل بنجاح',
+    );
+  });
+
+  loadCaregiverAndPatient().then((_) {
+    checkAndSendSosNotification();
+  });
+}
+
+Future<void> checkAndSendSosNotification() async {
+  final sosData = await getLatestActiveSos();
+
+  if (sosData == null) return;
+
+  final message = (sosData['message'] ?? 'المريض يحتاج مساعدة فورية').toString();
+
+  if (lastSosMessageShown == message) return;
+
+  lastSosMessageShown = message;
+
+  await NotificationService.showNotification(
+    title: '🚨 تنبيه طوارئ SOS',
+    body: message,
+  );
+}
+
+
+  Future<void> logout() async {
+  await FirebaseAuth.instance.signOut();
+
+  if (!mounted) return;
+
+  Navigator.pushAndRemoveUntil(
+    context,
+    MaterialPageRoute(
+      builder: (_) => const LoginScreen(),
+    ),
+    (route) => false,
+  );
+}
 
   Future<void> loadCaregiverAndPatient() async {
     try {
@@ -563,65 +613,107 @@ class _CaregiverDashboardScreenState extends State<CaregiverDashboardScreen> {
       textDirection: TextDirection.rtl,
       child: Scaffold(
         backgroundColor: backgroundColor,
-        appBar: AppBar(
-          backgroundColor: primaryColor,
-          title: const Text(
-            'متابعة المريض',
-            style: TextStyle(
-              fontFamily: 'Cairo',
-              fontWeight: FontWeight.bold,
-              color: Colors.white,
+      
+      
+       appBar: AppBar(
+  backgroundColor: primaryColor,
+  title: const Text(
+    'متابعة المريض',
+    style: TextStyle(
+      fontFamily: 'Cairo',
+      fontWeight: FontWeight.bold,
+      color: Colors.white,
+    ),
+  ),
+  actions: [
+    IconButton(
+      icon: const Icon(
+        Icons.logout,
+        color: Colors.white,
+      ),
+      onPressed: () async {
+        final result = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('تسجيل الخروج'),
+            content: const Text(
+              'هل أنت متأكد من تسجيل الخروج؟',
             ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('إلغاء'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('تسجيل الخروج'),
+              ),
+            ],
           ),
-        ),
+        );
+
+        if (result == true) {
+          logout();
+        }
+      },
+    ),
+  ],
+),
+
+
         body: loading
             ? const Center(child: CircularProgressIndicator())
-            : RefreshIndicator(
-                onRefresh: loadCaregiverAndPatient,
-                child: ListView(
-                  padding: const EdgeInsets.all(20),
-                  children: [
-                    Text(
-                      caregiverName.isEmpty
-                          ? 'أهلاً بك'
-                          : 'أهلاً $caregiverName',
-                      style: const TextStyle(
-                        fontSize: 26,
-                        fontFamily: 'Cairo',
-                        fontWeight: FontWeight.bold,
-                        color: textColor,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    const Text(
-                      'تابعي حالة المريض والتنبيهات المهمة من هنا.',
-                      style: TextStyle(
-                        fontSize: 17,
-                        fontFamily: 'Cairo',
-                        color: secondaryTextColor,
-                      ),
-                    ),
-                    const SizedBox(height: 22),
+            : 
+            
+            
+            
+            RefreshIndicator(
+  onRefresh: () async {
+    await loadCaregiverAndPatient();
+    await checkAndSendSosNotification();
+  },
+  child: ListView(
+    padding: const EdgeInsets.all(20),
+    children: [
+      Text(
+        caregiverName.isEmpty ? 'أهلاً بك' : 'أهلاً $caregiverName',
+        style: const TextStyle(
+          fontSize: 26,
+          fontFamily: 'Cairo',
+          fontWeight: FontWeight.bold,
+          color: textColor,
+        ),
+      ),
+      const SizedBox(height: 6),
+      const Text(
+        'تابعي حالة المريض والتنبيهات المهمة من هنا.',
+        style: TextStyle(
+          fontSize: 17,
+          fontFamily: 'Cairo',
+          color: secondaryTextColor,
+        ),
+      ),
+      const SizedBox(height: 22),
 
-                    sectionTitle('المريض المرتبط'),
-                    patientProfileCard(),
+      sectionTitle('المريض المرتبط'),
+      patientProfileCard(),
 
-                    const SizedBox(height: 18),
-                    sectionTitle('الحالة الصحية'),
-                    healthStatusCard(),
+      const SizedBox(height: 18),
+      sectionTitle('الحالة الصحية'),
+      healthStatusCard(),
 
-                    const SizedBox(height: 18),
-                    sectionTitle('الطوارئ'),
-                    sosCard(),
+      const SizedBox(height: 18),
+      sectionTitle('الطوارئ'),
+      sosCard(),
 
-                    const SizedBox(height: 18),
-                    sectionTitle('الخدمات السريعة'),
-                    quickActions(),
+      const SizedBox(height: 18),
+      sectionTitle('الخدمات السريعة'),
+      quickActions(),
 
-                    const SizedBox(height: 24),
-                  ],
-                ),
-              ),
+      const SizedBox(height: 24),
+    ],
+  ),
+),
       ),
     );
   }

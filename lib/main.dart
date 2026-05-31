@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'services/notification_service.dart';
+
+
 
 import 'screens/splash_screen.dart';
 
@@ -12,6 +15,7 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   await Firebase.initializeApp();
+  await NotificationService.init();
 
   FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
 
@@ -19,6 +23,8 @@ void main() async {
 
   runApp(const MyCareApp());
 }
+
+
 
 class MyCareApp extends StatelessWidget {
   const MyCareApp({super.key});
