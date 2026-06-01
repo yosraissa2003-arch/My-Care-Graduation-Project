@@ -28,7 +28,6 @@ class _LoginScreenState extends State<LoginScreen> {
   static const Color textColor = Color(0xFF1F2937);
   static const Color secondaryTextColor = Color(0xFF4B5563);
   static const Color warningColor = Color(0xFFED6C02);
-  static const Color successColor = Color(0xFF2E7D32);
   static const Color errorColor = Color(0xFFD32F2F);
 
   @override
@@ -66,7 +65,7 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   String generateEmailFromPhone(String normalizedPhone) {
-    return "$normalizedPhone@test.com";
+    return '$normalizedPhone@test.com';
   }
 
   Future<void> showMessage(String message, {Color color = primaryColor}) async {
@@ -101,7 +100,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Widget getHomeScreenByRole(String role) {
     if (role == 'مريض') {
-      return HomeScreen();
+      return const HomeScreen();
     }
 
     if (role == 'مرافق') {
@@ -112,7 +111,7 @@ class _LoginScreenState extends State<LoginScreen> {
       return const DoctorDashboardScreen();
     }
 
-    return HomeScreen();
+    return const HomeScreen();
   }
 
   Future<void> login() async {
@@ -122,19 +121,19 @@ class _LoginScreenState extends State<LoginScreen> {
     final password = passwordController.text.trim();
 
     if (phone.isEmpty) {
-      showMessage("رقم الهاتف مطلوب", color: errorColor);
+      showMessage('رقم الهاتف مطلوب', color: errorColor);
       return;
     }
 
     final normalizedPhone = normalizePhoneNumber(phone);
 
     if (normalizedPhone == null) {
-      showMessage("رقم الهاتف غير صحيح", color: errorColor);
+      showMessage('رقم الهاتف غير صحيح', color: errorColor);
       return;
     }
 
     if (password.isEmpty) {
-      showMessage("كلمة المرور مطلوبة", color: errorColor);
+      showMessage('كلمة المرور مطلوبة', color: errorColor);
       return;
     }
 
@@ -155,7 +154,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
       if (!userDoc.exists) {
         showMessage(
-          "تم تسجيل الدخول لكن بيانات المستخدم غير موجودة",
+          'تم تسجيل الدخول لكن بيانات المستخدم غير موجودة',
           color: warningColor,
         );
         return;
@@ -165,9 +164,11 @@ class _LoginScreenState extends State<LoginScreen> {
       final String role = (data?['role'] ?? '').toString().trim();
 
       if (role.isEmpty) {
-        showMessage("نوع الحساب غير موجود في Firebase", color: errorColor);
+        showMessage('نوع الحساب غير موجود في Firebase', color: errorColor);
         return;
       }
+
+      TextInput.finishAutofillContext(shouldSave: true);
 
       if (!mounted) return;
 
@@ -178,22 +179,22 @@ class _LoginScreenState extends State<LoginScreen> {
     } on FirebaseAuthException catch (e) {
       switch (e.code) {
         case 'invalid-credential':
-          showMessage("رقم الهاتف أو كلمة المرور غير صحيحة", color: errorColor);
+          showMessage('رقم الهاتف أو كلمة المرور غير صحيحة', color: errorColor);
           break;
         case 'user-not-found':
-          showMessage("هذا الحساب غير موجود", color: errorColor);
+          showMessage('هذا الحساب غير موجود', color: errorColor);
           break;
         case 'wrong-password':
-          showMessage("كلمة المرور خاطئة", color: errorColor);
+          showMessage('كلمة المرور خاطئة', color: errorColor);
           break;
         case 'network-request-failed':
-          showMessage("تحققي من اتصال الإنترنت", color: errorColor);
+          showMessage('تحققي من اتصال الإنترنت', color: errorColor);
           break;
         default:
-          showMessage("فشل تسجيل الدخول", color: errorColor);
+          showMessage('فشل تسجيل الدخول', color: errorColor);
       }
     } catch (_) {
-      showMessage("حدث خطأ غير متوقع", color: errorColor);
+      showMessage('حدث خطأ غير متوقع', color: errorColor);
     } finally {
       if (mounted) setState(() => isLoading = false);
     }
@@ -232,144 +233,155 @@ class _LoginScreenState extends State<LoginScreen> {
         body: SafeArea(
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const SizedBox(height: 40),
-                const Text(
-                  'تسجيل الدخول',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 24,
-                    fontFamily: 'Cairo',
-                    fontWeight: FontWeight.w700,
-                    color: primaryColor,
-                  ),
-                ),
-                const SizedBox(height: 24),
-                Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: cardColor,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: const Text(
-                    'أدخلي رقم الهاتف وكلمة المرور للوصول إلى حسابك.',
+            child: AutofillGroup(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const SizedBox(height: 40),
+                  const Text(
+                    'تسجيل الدخول',
                     textAlign: TextAlign.center,
                     style: TextStyle(
-                      fontSize: 18,
+                      fontSize: 24,
                       fontFamily: 'Cairo',
-                      color: secondaryTextColor,
-                      height: 1.5,
+                      fontWeight: FontWeight.w700,
+                      color: primaryColor,
                     ),
                   ),
-                ),
-                const SizedBox(height: 24),
-                SizedBox(
-                  height: 56,
-                  child: TextField(
-                    controller: phoneController,
-                    keyboardType: TextInputType.phone,
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontFamily: 'Cairo',
-                      color: textColor,
+                  const SizedBox(height: 24),
+                  Container(
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: cardColor,
+                      borderRadius: BorderRadius.circular(20),
                     ),
-                    decoration: inputDecoration(
-                      hint: 'رقم الهاتف',
-                      icon: Icons.phone,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                SizedBox(
-                  height: 56,
-                  child: TextField(
-                    controller: passwordController,
-                    obscureText: obscurePassword,
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontFamily: 'Cairo',
-                      color: textColor,
-                    ),
-                    decoration: inputDecoration(
-                      hint: 'كلمة المرور',
-                      icon: Icons.lock,
-                      suffixIcon: IconButton(
-                        icon: Icon(
-                          obscurePassword
-                              ? Icons.visibility_off
-                              : Icons.visibility,
-                          color: secondaryTextColor,
-                        ),
-                        onPressed: () {
-                          setState(() => obscurePassword = !obscurePassword);
-                        },
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 24),
-                SizedBox(
-                  height: 56,
-                  child: ElevatedButton.icon(
-                    onPressed: isLoading ? null : login,
-                    icon: isLoading
-                        ? const SizedBox(
-                            width: 22,
-                            height: 22,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2.5,
-                              color: Colors.white,
-                            ),
-                          )
-                        : const Icon(Icons.login, color: Colors.white),
-                    label: Text(
-                      isLoading ? 'جاري تسجيل الدخول' : 'تسجيل الدخول',
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontFamily: 'Cairo',
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
-                    ),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: primaryColor,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                SizedBox(
-                  height: 56,
-                  child: OutlinedButton.icon(
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (_) => const SignUpStep1()),
-                      );
-                    },
-                    icon: const Icon(Icons.person_add, color: primaryColor),
-                    label: const Text(
-                      'إنشاء حساب جديد',
+                    child: const Text(
+                      'أدخل رقم الهاتف وكلمة المرور للوصول إلى حسابك.',
+                      textAlign: TextAlign.center,
                       style: TextStyle(
                         fontSize: 18,
                         fontFamily: 'Cairo',
-                        fontWeight: FontWeight.bold,
-                        color: primaryColor,
-                      ),
-                    ),
-                    style: OutlinedButton.styleFrom(
-                      side: const BorderSide(color: primaryColor, width: 1.5),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
+                        color: secondaryTextColor,
+                        height: 1.5,
                       ),
                     ),
                   ),
-                ),
-              ],
+                  const SizedBox(height: 24),
+                  SizedBox(
+                    height: 56,
+                    child: TextField(
+                      controller: phoneController,
+                      keyboardType: TextInputType.phone,
+                      autofillHints: const [
+                        AutofillHints.username,
+                        AutofillHints.telephoneNumber,
+                      ],
+                      textInputAction: TextInputAction.next,
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontFamily: 'Cairo',
+                        color: textColor,
+                      ),
+                      decoration: inputDecoration(
+                        hint: 'رقم الهاتف',
+                        icon: Icons.phone,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    height: 56,
+                    child: TextField(
+                      controller: passwordController,
+                      obscureText: obscurePassword,
+                      autofillHints: const [AutofillHints.password],
+                      textInputAction: TextInputAction.done,
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontFamily: 'Cairo',
+                        color: textColor,
+                      ),
+                      decoration: inputDecoration(
+                        hint: 'كلمة المرور',
+                        icon: Icons.lock,
+                        suffixIcon: IconButton(
+                          icon: Icon(
+                            obscurePassword
+                                ? Icons.visibility_off
+                                : Icons.visibility,
+                            color: secondaryTextColor,
+                          ),
+                          onPressed: () {
+                            setState(() => obscurePassword = !obscurePassword);
+                          },
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    height: 56,
+                    child: ElevatedButton.icon(
+                      onPressed: isLoading ? null : login,
+                      icon: isLoading
+                          ? const SizedBox(
+                              width: 22,
+                              height: 22,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2.5,
+                                color: Colors.white,
+                              ),
+                            )
+                          : const Icon(Icons.login, color: Colors.white),
+                      label: Text(
+                        isLoading ? 'جاري تسجيل الدخول' : 'تسجيل الدخول',
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontFamily: 'Cairo',
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: primaryColor,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    height: 56,
+                    child: OutlinedButton.icon(
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const SignUpStep1(),
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.person_add, color: primaryColor),
+                      label: const Text(
+                        'إنشاء حساب جديد',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontFamily: 'Cairo',
+                          fontWeight: FontWeight.bold,
+                          color: primaryColor,
+                        ),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        side: const BorderSide(color: primaryColor, width: 1.5),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),

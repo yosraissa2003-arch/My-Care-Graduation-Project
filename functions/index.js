@@ -1,32 +1,89 @@
-/**
- * Import function triggers from their respective submodules:
- *
- * const {onCall} = require("firebase-functions/v2/https");
- * const {onDocumentWritten} = require("firebase-functions/v2/firestore");
- *
- * See a full list of supported triggers at https://firebase.google.com/docs/functions
- */
+const functions = require('firebase-functions');
+const admin = require('firebase-admin');
 
-const {setGlobalOptions} = require("firebase-functions");
-const {onRequest} = require("firebase-functions/https");
-const logger = require("firebase-functions/logger");
+admin.initializeApp();
 
-// For cost control, you can set the maximum number of containers that can be
-// running at the same time. This helps mitigate the impact of unexpected
-// traffic spikes by instead downgrading performance. This limit is a
-// per-function limit. You can override the limit for each function using the
-// `maxInstances` option in the function's options, e.g.
-// `onRequest({ maxInstances: 5 }, (req, res) => { ... })`.
-// NOTE: setGlobalOptions does not apply to functions using the v1 API. V1
-// functions should each use functions.runWith({ maxInstances: 10 }) instead.
-// In the v1 API, each function can only serve one request per container, so
-// this will be the maximum concurrent request count.
-setGlobalOptions({ maxInstances: 10 });
+async function getUserTokens(userId) {
+  if (!userId) return [];
 
-// Create and deploy your first functions
-// https://firebase.google.com/docs/functions/get-started
+  const userDoc = await admin.firestore().collection('users').doc(userId).get();
+  if (!userDoc.exists) return [];
 
-// exports.helloWorld = onRequest((request, response) => {
-//   logger.info("Hello logs!", {structuredData: true});
-//   response.send("Hello from Firebase!");
-// });
+  const user = userDoc.data() || {};
+  const tokens = [];
+
+  if (typeof user.fcmToken === 'string' && user.fcmToken.length > 0) {
+    tokens.push(user.fcmToken);
+  }
+
+  if (Array.isArray(user.fcmTokens)) {
+    for (const token of user.fcmTokens) {
+      if (typeof token === 'string' && token.length > 0) tokens.push(token);
+    }
+  }
+
+  return [...new Set(tokens)];
+}
+
+async function sendToCaregiver(data, titleFallback, bodyFallback) {
+  const caregiverId = data.caregiverId || data.recipientId;
+  const tokens = await getUserTokens(caregiverId);
+
+  if (tokens.length === 0) {
+    console.log('No caregiver token found for:', caregiverId);
+    return null;
+  }
+
+  const title = data.title || titleFallback || 'تنبيه MyCare';
+  const body = data.message || bodyFallback || 'يوجد تنبيه جديد';
+
+  const message = {
+    tokens,
+    notification: { title, body },
+    data: {
+      type: String(data.type || 'general'),
+      patientId: String(data.patientId || data.userId || ''),
+      caregiverId: String(caregiverId || ''),
+      title: String(title),
+      message: String(body),
+    },
+    android: {
+      priority: 'high',
+      notification: {
+        channelId: 'mycare_urgent_channel',
+        sound: 'default',
+        priority: 'max',
+      },
+    },
+  };
+
+  const response = await admin.messaging().sendEachForMulticast(message);
+  console.log('FCM sent:', response.successCount, 'failed:', response.failureCount);
+  return response;
+}
+
+exports.sendNotificationOnCreate = functions.firestore
+  .document('notifications/{notificationId}')
+  .onCreate(async (snap) => {
+    const data = snap.data() || {};
+    if (!data.caregiverId && !data.recipientId) return null;
+    return sendToCaregiver(data, 'تنبيه MyCare', data.message);
+  });
+
+exports.sendSosOnCreate = functions.firestore
+  .document('sosAlerts/{sosId}')
+  .onCreate(async (snap) => {
+    const data = snap.data() || {};
+    if (!data.caregiverId) return null;
+
+    return sendToCaregiver(
+      {
+        ...data,
+        type: 'sos',
+        title: '🚨 تنبيه طوارئ SOS',
+        message: data.message || 'المريض يحتاج مساعدة فورية',
+      },
+      '🚨 تنبيه طوارئ SOS',
+      data.message || 'المريض يحتاج مساعدة فورية'
+    );
+  });

@@ -373,7 +373,9 @@ class HomeScreen extends StatelessWidget {
         final heartRate = _toInt(health['heartRate']);
         final systolic = _toInt(health['bloodPressureSystolic']);
         final diastolic = _toInt(health['bloodPressureDiastolic']);
-        final glucose = _toInt(health['glucose']);
+        final glucose = _toInt(health['glucose'] ?? health['sugar']);
+        final oxygen = _toInt(health['oxygen']);
+        final temperature = health['temperature']?.toString() ?? 'لا يوجد';
 
         final status = getHealthStatus(
           heartRate: heartRate,
@@ -412,7 +414,7 @@ class HomeScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'النبض: $heartRate | الضغط: $systolic/$diastolic | السكر: $glucose',
+                      'النبض: $heartRate | الضغط: $systolic/$diastolic | السكر: $glucose | الأكسجين: $oxygen | الحرارة: $temperature',
                       style: const TextStyle(
                         fontSize: 18,
                         fontFamily: 'Cairo',
@@ -820,18 +822,20 @@ class HomeScreen extends StatelessWidget {
 
   Future<Position?> _getCurrentPosition(BuildContext context) async {
     try {
-      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            backgroundColor: warningColor,
-            content: Text(
-              'يرجى تفعيل خدمة الموقع من الهاتف',
-              textAlign: TextAlign.right,
-              style: TextStyle(fontSize: 18, fontFamily: 'Cairo'),
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              backgroundColor: warningColor,
+              content: Text(
+                'يرجى تفعيل خدمة الموقع من الهاتف ثم اضغطي SOS مرة أخرى',
+                textAlign: TextAlign.right,
+                style: TextStyle(fontSize: 18, fontFamily: 'Cairo'),
+              ),
             ),
-          ),
-        );
+          );
+        }
         return null;
       }
 
@@ -841,24 +845,47 @@ class HomeScreen extends StatelessWidget {
         permission = await Geolocator.requestPermission();
       }
 
-      if (permission == LocationPermission.denied ||
-          permission == LocationPermission.deniedForever) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            backgroundColor: warningColor,
-            content: Text(
-              'لم يتم السماح بالموقع، سيتم إرسال SOS بدون موقع',
-              textAlign: TextAlign.right,
-              style: TextStyle(fontSize: 18, fontFamily: 'Cairo'),
+      if (permission == LocationPermission.deniedForever) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              backgroundColor: warningColor,
+              content: Text(
+                'الموقع مرفوض نهائياً. فعّليه من إعدادات التطبيق',
+                textAlign: TextAlign.right,
+                style: TextStyle(fontSize: 18, fontFamily: 'Cairo'),
+              ),
             ),
-          ),
-        );
+          );
+        }
+        await Geolocator.openAppSettings();
         return null;
       }
 
-      return await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
-      );
+      if (permission == LocationPermission.denied) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              backgroundColor: warningColor,
+              content: Text(
+                'لم يتم السماح بالموقع، سيتم إرسال SOS بدون موقع',
+                textAlign: TextAlign.right,
+                style: TextStyle(fontSize: 18, fontFamily: 'Cairo'),
+              ),
+            ),
+          );
+        }
+        return null;
+      }
+
+      try {
+        return await Geolocator.getCurrentPosition(
+          desiredAccuracy: LocationAccuracy.high,
+          timeLimit: const Duration(seconds: 12),
+        );
+      } catch (_) {
+        return await Geolocator.getLastKnownPosition();
+      }
     } catch (_) {
       return null;
     }
@@ -879,38 +906,68 @@ class HomeScreen extends StatelessWidget {
           final emergencyPhone = (user['emergencyContact'] ?? '').toString();
 
           String caregiverId = '';
+          final linkedCaregiverPhone =
+              (user['linkedPhone'] ??
+                      user['linkedPatientPhone'] ??
+                      user['linkedPhoneNumber'] ??
+                      '')
+                  .toString();
 
-          if (emergencyPhone.isNotEmpty) {
+          final possibleCaregiverPhones = <String>{
+            if (linkedCaregiverPhone.trim().isNotEmpty)
+              linkedCaregiverPhone.trim(),
+            if (emergencyPhone.trim().isNotEmpty) emergencyPhone.trim(),
+          };
+
+          for (final phone in possibleCaregiverPhones) {
             final caregiverQuery = await FirebaseFirestore.instance
                 .collection('users')
-                .where('phone', isEqualTo: emergencyPhone)
+                .where('phone', isEqualTo: phone)
+                .where('role', whereIn: ['مرافق', 'معتني'])
                 .limit(1)
                 .get();
 
             if (caregiverQuery.docs.isNotEmpty) {
               caregiverId = caregiverQuery.docs.first.id;
+              break;
             }
           }
 
           final position = await _getCurrentPosition(context);
 
+          final hasLocation = position != null;
+
           await FirebaseFirestore.instance.collection('sosAlerts').add({
             'userId': uid,
+            'patientId': uid,
             'caregiverId': caregiverId,
+            'linkedCaregiverPhone': linkedCaregiverPhone,
             'patientName': patientName,
             'patientPhone': user['phone'] ?? '',
             'emergencyPhone': emergencyPhone,
             'source': 'manual',
             'status': 'active',
             'message': 'المريض $patientName يحتاج مساعدة فورية',
+            'locationAvailable': hasLocation,
             'latitude': position?.latitude,
             'longitude': position?.longitude,
+            'location': hasLocation
+                ? {
+                    'latitude': position.latitude,
+                    'longitude': position.longitude,
+                  }
+                : null,
             'createdAt': Timestamp.now(),
           });
 
           await FirebaseFirestore.instance.collection('notifications').add({
             'userId': uid,
+            'patientId': uid,
             'caregiverId': caregiverId,
+            'recipientId': caregiverId,
+            'patientName': patientName,
+            'patientPhone': user['phone'] ?? '',
+            'linkedCaregiverPhone': linkedCaregiverPhone,
             'title': 'تنبيه طوارئ SOS',
             'message': 'المريض $patientName يحتاج مساعدة فورية',
             'type': 'sos',
@@ -920,12 +977,14 @@ class HomeScreen extends StatelessWidget {
           });
 
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              backgroundColor: errorColor,
+            SnackBar(
+              backgroundColor: hasLocation ? successColor : errorColor,
               content: Text(
-                'تم إرسال تنبيه الطوارئ للمرافق',
+                hasLocation
+                    ? 'تم إرسال SOS مع الموقع للمرافق'
+                    : 'تم إرسال SOS بدون موقع. فعّلي الموقع من إعدادات الهاتف',
                 textAlign: TextAlign.right,
-                style: TextStyle(fontSize: 18, fontFamily: 'Cairo'),
+                style: const TextStyle(fontSize: 18, fontFamily: 'Cairo'),
               ),
             ),
           );

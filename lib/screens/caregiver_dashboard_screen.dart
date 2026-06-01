@@ -2,11 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'login_screen.dart';
-
-import '../services/notification_service.dart';
-
-
+import 'package:mycare/screens/login_screen.dart';
 
 class CaregiverDashboardScreen extends StatefulWidget {
   const CaregiverDashboardScreen({super.key});
@@ -31,56 +27,11 @@ class _CaregiverDashboardScreenState extends State<CaregiverDashboardScreen> {
   Map<String, dynamic>? patientData;
   String? patientId;
 
-  String? lastSosMessageShown;
-
-
-@override
-void initState() {
-  super.initState();
-
-  Future.delayed(const Duration(seconds: 3), () {
-    NotificationService.showNotification(
-      title: 'اختبار',
-      body: 'الإشعارات تعمل بنجاح',
-    );
-  });
-
-  loadCaregiverAndPatient().then((_) {
-    checkAndSendSosNotification();
-  });
-}
-
-Future<void> checkAndSendSosNotification() async {
-  final sosData = await getLatestActiveSos();
-
-  if (sosData == null) return;
-
-  final message = (sosData['message'] ?? 'المريض يحتاج مساعدة فورية').toString();
-
-  if (lastSosMessageShown == message) return;
-
-  lastSosMessageShown = message;
-
-  await NotificationService.showNotification(
-    title: '🚨 تنبيه طوارئ SOS',
-    body: message,
-  );
-}
-
-
-  Future<void> logout() async {
-  await FirebaseAuth.instance.signOut();
-
-  if (!mounted) return;
-
-  Navigator.pushAndRemoveUntil(
-    context,
-    MaterialPageRoute(
-      builder: (_) => const LoginScreen(),
-    ),
-    (route) => false,
-  );
-}
+  @override
+  void initState() {
+    super.initState();
+    loadCaregiverAndPatient();
+  }
 
   Future<void> loadCaregiverAndPatient() async {
     try {
@@ -125,17 +76,76 @@ Future<void> checkAndSendSosNotification() async {
   }
 
   Future<Map<String, dynamic>?> getLastHealthReading() async {
-    if (patientId == null) return null;
+    if (patientId == null && patientData == null) return null;
 
     try {
-      final query = await FirebaseFirestore.instance
-          .collection('healthLogs')
-          .where('userId', isEqualTo: patientId)
-          .get();
+      final List<QueryDocumentSnapshot<Map<String, dynamic>>> allDocs = [];
+      final patientPhone = (patientData?['phone'] ?? '').toString();
+      final originalPhone = (patientData?['originalPhone'] ?? '').toString();
 
-      if (query.docs.isEmpty) return null;
+      final possibleIds = <String>{
+        if (patientId != null) patientId!,
+        if ((patientData?['uid'] ?? '').toString().isNotEmpty)
+          (patientData?['uid']).toString(),
+        if ((patientData?['userId'] ?? '').toString().isNotEmpty)
+          (patientData?['userId']).toString(),
+        if ((patientData?['patientId'] ?? '').toString().isNotEmpty)
+          (patientData?['patientId']).toString(),
+      };
 
-      final docs = query.docs;
+      for (final id in possibleIds) {
+        final byUserId = await FirebaseFirestore.instance
+            .collection('healthLogs')
+            .where('userId', isEqualTo: id)
+            .get();
+        allDocs.addAll(byUserId.docs);
+
+        final byPatientId = await FirebaseFirestore.instance
+            .collection('healthLogs')
+            .where('patientId', isEqualTo: id)
+            .get();
+        allDocs.addAll(byPatientId.docs);
+
+        final oldByPatientId = await FirebaseFirestore.instance
+            .collection('health_readings')
+            .where('patientId', isEqualTo: id)
+            .get();
+        allDocs.addAll(oldByPatientId.docs);
+      }
+
+      for (final phone in {patientPhone, originalPhone}) {
+        if (phone.isEmpty) continue;
+
+        final byPhone = await FirebaseFirestore.instance
+            .collection('healthLogs')
+            .where('patientPhone', isEqualTo: phone)
+            .get();
+        allDocs.addAll(byPhone.docs);
+
+        final oldByPhone = await FirebaseFirestore.instance
+            .collection('health_readings')
+            .where('patientPhone', isEqualTo: phone)
+            .get();
+        allDocs.addAll(oldByPhone.docs);
+      }
+
+      final uniqueDocs =
+          <String, QueryDocumentSnapshot<Map<String, dynamic>>>{};
+      for (final doc in allDocs) {
+        uniqueDocs[doc.id] = doc;
+      }
+
+      final docs = uniqueDocs.values.toList();
+
+      if (docs.isEmpty) {
+        final lastReading = patientData?['lastHealthReading'];
+        if (lastReading is Map<String, dynamic> && lastReading.isNotEmpty) {
+          return Map<String, dynamic>.from(lastReading);
+        }
+
+        return null;
+      }
+
       docs.sort((a, b) {
         final aTime = a.data()['createdAt'];
         final bTime = b.data()['createdAt'];
@@ -155,18 +165,78 @@ Future<void> checkAndSendSosNotification() async {
   }
 
   Future<Map<String, dynamic>?> getLatestActiveSos() async {
-    if (patientId == null) return null;
+    if (patientId == null && patientData == null) return null;
 
     try {
-      final query = await FirebaseFirestore.instance
-          .collection('sosAlerts')
-          .where('userId', isEqualTo: patientId)
-          .where('status', isEqualTo: 'active')
-          .get();
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      final patientPhone = (patientData?['phone'] ?? '').toString();
+      final originalPhone = (patientData?['originalPhone'] ?? '').toString();
+      final emergencyContact = (patientData?['emergencyContact'] ?? '')
+          .toString();
+      final List<QueryDocumentSnapshot<Map<String, dynamic>>> allDocs = [];
 
-      if (query.docs.isEmpty) return null;
+      final possibleIds = <String>{
+        if (patientId != null) patientId!,
+        if ((patientData?['uid'] ?? '').toString().isNotEmpty)
+          (patientData?['uid']).toString(),
+        if ((patientData?['userId'] ?? '').toString().isNotEmpty)
+          (patientData?['userId']).toString(),
+      };
 
-      final docs = query.docs;
+      for (final id in possibleIds) {
+        final byUserId = await FirebaseFirestore.instance
+            .collection('sosAlerts')
+            .where('userId', isEqualTo: id)
+            .where('status', isEqualTo: 'active')
+            .get();
+        allDocs.addAll(byUserId.docs);
+
+        final byPatientId = await FirebaseFirestore.instance
+            .collection('sosAlerts')
+            .where('patientId', isEqualTo: id)
+            .where('status', isEqualTo: 'active')
+            .get();
+        allDocs.addAll(byPatientId.docs);
+      }
+
+      for (final phone in {patientPhone, originalPhone}) {
+        if (phone.isEmpty) continue;
+
+        final byPatientPhone = await FirebaseFirestore.instance
+            .collection('sosAlerts')
+            .where('patientPhone', isEqualTo: phone)
+            .where('status', isEqualTo: 'active')
+            .get();
+        allDocs.addAll(byPatientPhone.docs);
+      }
+
+      if (emergencyContact.isNotEmpty) {
+        final byEmergencyPhone = await FirebaseFirestore.instance
+            .collection('sosAlerts')
+            .where('emergencyPhone', isEqualTo: emergencyContact)
+            .where('status', isEqualTo: 'active')
+            .get();
+        allDocs.addAll(byEmergencyPhone.docs);
+      }
+
+      if (uid != null) {
+        final byCaregiver = await FirebaseFirestore.instance
+            .collection('sosAlerts')
+            .where('caregiverId', isEqualTo: uid)
+            .where('status', isEqualTo: 'active')
+            .get();
+        allDocs.addAll(byCaregiver.docs);
+      }
+
+      final uniqueDocs =
+          <String, QueryDocumentSnapshot<Map<String, dynamic>>>{};
+      for (final doc in allDocs) {
+        uniqueDocs[doc.id] = doc;
+      }
+
+      final docs = uniqueDocs.values.toList();
+      if (docs.isEmpty) return null;
+
       docs.sort((a, b) {
         final aTime = a.data()['createdAt'];
         final bTime = b.data()['createdAt'];
@@ -186,7 +256,8 @@ Future<void> checkAndSendSosNotification() async {
   }
 
   Future<void> makePhoneCall() async {
-    final phone = (patientData?['phone'] ?? '').toString();
+    final phone = (patientData?['phone'] ?? patientData?['originalPhone'] ?? '')
+        .toString();
 
     if (phone.isEmpty || phone == 'غير متوفر') {
       showMessage('لا يوجد رقم هاتف للمريض');
@@ -203,21 +274,33 @@ Future<void> checkAndSendSosNotification() async {
   }
 
   Future<void> openPatientLocation(Map<String, dynamic>? sosData) async {
-    final latitude = sosData?['latitude'];
-    final longitude = sosData?['longitude'];
+    try {
+      dynamic latitude = sosData?['latitude'] ?? sosData?['lat'];
+      dynamic longitude = sosData?['longitude'] ?? sosData?['lng'];
 
-    if (latitude == null || longitude == null) {
-      showMessage('لا يوجد موقع محفوظ لهذا التنبيه');
-      return;
-    }
+      if ((latitude == null || longitude == null) &&
+          sosData?['location'] is Map) {
+        final location = sosData!['location'] as Map;
+        latitude = location['latitude'] ?? location['lat'];
+        longitude = location['longitude'] ?? location['lng'];
+      }
 
-    final uri = Uri.parse(
-      'https://www.google.com/maps/search/?api=1&query=$latitude,$longitude',
-    );
+      final latText = latitude?.toString().trim() ?? '';
+      final lngText = longitude?.toString().trim() ?? '';
 
-    if (await canLaunchUrl(uri)) {
+      if (latText.isEmpty ||
+          lngText.isEmpty ||
+          latText == 'null' ||
+          lngText == 'null') {
+        showMessage('لا يوجد موقع محفوظ لهذا التنبيه');
+        return;
+      }
+
+      final uri = Uri.parse('https://maps.google.com/?q=$latText,$lngText');
+
       await launchUrl(uri, mode: LaunchMode.externalApplication);
-    } else {
+    } catch (e) {
+      debugPrint('Location Error: $e');
       showMessage('تعذر فتح الخريطة');
     }
   }
@@ -226,18 +309,63 @@ Future<void> checkAndSendSosNotification() async {
     if (reading == null) return 'لا توجد قراءات';
 
     final heart = double.tryParse('${reading['heartRate'] ?? ''}') ?? 0;
-    final oxygen = double.tryParse('${reading['oxygen'] ?? ''}') ?? 0;
+    final oxygen =
+        double.tryParse(
+          '${reading['oxygen'] ?? reading['oxygenLevel'] ?? ''}',
+        ) ??
+        0;
     final temp = double.tryParse('${reading['temperature'] ?? ''}') ?? 0;
+    final glucose =
+        double.tryParse('${reading['glucose'] ?? reading['sugar'] ?? ''}') ?? 0;
+    final systolic =
+        double.tryParse('${reading['bloodPressureSystolic'] ?? ''}') ?? 0;
+    final diastolic =
+        double.tryParse('${reading['bloodPressureDiastolic'] ?? ''}') ?? 0;
 
     if (oxygen > 0 && oxygen < 92) return 'حرجة';
     if (heart > 120 || heart < 45) return 'حرجة';
     if (temp >= 39) return 'حرجة';
+    if (glucose > 250 || (glucose > 0 && glucose < 70)) return 'حرجة';
+    if (systolic >= 180 || diastolic >= 120) return 'حرجة';
 
     if (oxygen > 0 && oxygen < 95) return 'تحذير';
     if (heart > 100 || heart < 55) return 'تحذير';
     if (temp >= 38) return 'تحذير';
+    if (glucose > 180) return 'تحذير';
+    if (systolic >= 140 || diastolic >= 90) return 'تحذير';
 
     return 'طبيعية';
+  }
+
+  String readingValue(Map<String, dynamic>? reading, List<String> keys) {
+    if (reading == null) return 'لا يوجد';
+
+    for (final key in keys) {
+      final value = reading[key];
+      if (value != null && value.toString().trim().isNotEmpty) {
+        return value.toString();
+      }
+    }
+
+    return 'لا يوجد';
+  }
+
+  String bloodPressureValue(Map<String, dynamic>? reading) {
+    if (reading == null) return 'لا يوجد';
+
+    final full = reading['bloodPressure'];
+    if (full != null && full.toString().trim().isNotEmpty) {
+      return full.toString();
+    }
+
+    final systolic = reading['bloodPressureSystolic'];
+    final diastolic = reading['bloodPressureDiastolic'];
+
+    if (systolic != null && diastolic != null) {
+      return '$systolic/$diastolic';
+    }
+
+    return 'لا يوجد';
   }
 
   Color statusColor(String status) {
@@ -463,19 +591,31 @@ Future<void> checkAndSendSosNotification() async {
               infoCard(
                 icon: Icons.favorite,
                 title: 'نبض القلب',
-                value: '${reading?['heartRate'] ?? 'لا يوجد'}',
+                value: readingValue(reading, ['heartRate']),
                 iconColor: dangerColor,
+              ),
+              infoCard(
+                icon: Icons.bloodtype,
+                title: 'ضغط الدم',
+                value: bloodPressureValue(reading),
+                iconColor: primaryColor,
+              ),
+              infoCard(
+                icon: Icons.water_drop,
+                title: 'السكر',
+                value: readingValue(reading, ['glucose', 'sugar']),
+                iconColor: warningColor,
               ),
               infoCard(
                 icon: Icons.air,
                 title: 'الأكسجين',
-                value: '${reading?['oxygen'] ?? 'لا يوجد'}',
+                value: readingValue(reading, ['oxygen', 'oxygenLevel']),
                 iconColor: primaryColor,
               ),
               infoCard(
                 icon: Icons.thermostat,
                 title: 'الحرارة',
-                value: '${reading?['temperature'] ?? 'لا يوجد'}',
+                value: readingValue(reading, ['temperature']),
                 iconColor: warningColor,
               ),
             ],
@@ -613,107 +753,82 @@ Future<void> checkAndSendSosNotification() async {
       textDirection: TextDirection.rtl,
       child: Scaffold(
         backgroundColor: backgroundColor,
-      
-      
-       appBar: AppBar(
-  backgroundColor: primaryColor,
-  title: const Text(
-    'متابعة المريض',
-    style: TextStyle(
-      fontFamily: 'Cairo',
-      fontWeight: FontWeight.bold,
-      color: Colors.white,
-    ),
-  ),
-  actions: [
-    IconButton(
-      icon: const Icon(
-        Icons.logout,
-        color: Colors.white,
-      ),
-      onPressed: () async {
-        final result = await showDialog<bool>(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: const Text('تسجيل الخروج'),
-            content: const Text(
-              'هل أنت متأكد من تسجيل الخروج؟',
+        appBar: AppBar(
+          backgroundColor: primaryColor,
+          title: const Text(
+            'متابعة المريض',
+            style: TextStyle(
+              fontFamily: 'Cairo',
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
             ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: const Text('إلغاء'),
-              ),
-              TextButton(
-                onPressed: () => Navigator.pop(context, true),
-                child: const Text('تسجيل الخروج'),
-              ),
-            ],
           ),
-        );
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.logout, color: Colors.white),
+              tooltip: 'تسجيل الخروج',
+              onPressed: () async {
+                await FirebaseAuth.instance.signOut();
 
-        if (result == true) {
-          logout();
-        }
-      },
-    ),
-  ],
-),
+                if (!mounted) return;
 
-
+                Navigator.pushAndRemoveUntil(
+                  context,
+                  MaterialPageRoute(builder: (_) => const LoginScreen()),
+                  (route) => false,
+                );
+              },
+            ),
+          ],
+        ),
         body: loading
             ? const Center(child: CircularProgressIndicator())
-            : 
-            
-            
-            
-            RefreshIndicator(
-  onRefresh: () async {
-    await loadCaregiverAndPatient();
-    await checkAndSendSosNotification();
-  },
-  child: ListView(
-    padding: const EdgeInsets.all(20),
-    children: [
-      Text(
-        caregiverName.isEmpty ? 'أهلاً بك' : 'أهلاً $caregiverName',
-        style: const TextStyle(
-          fontSize: 26,
-          fontFamily: 'Cairo',
-          fontWeight: FontWeight.bold,
-          color: textColor,
-        ),
-      ),
-      const SizedBox(height: 6),
-      const Text(
-        'تابعي حالة المريض والتنبيهات المهمة من هنا.',
-        style: TextStyle(
-          fontSize: 17,
-          fontFamily: 'Cairo',
-          color: secondaryTextColor,
-        ),
-      ),
-      const SizedBox(height: 22),
+            : RefreshIndicator(
+                onRefresh: loadCaregiverAndPatient,
+                child: ListView(
+                  padding: const EdgeInsets.all(20),
+                  children: [
+                    Text(
+                      caregiverName.isEmpty
+                          ? 'أهلاً بك'
+                          : 'أهلاً $caregiverName',
+                      style: const TextStyle(
+                        fontSize: 26,
+                        fontFamily: 'Cairo',
+                        fontWeight: FontWeight.bold,
+                        color: textColor,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    const Text(
+                      'تابعي حالة المريض والتنبيهات المهمة من هنا.',
+                      style: TextStyle(
+                        fontSize: 17,
+                        fontFamily: 'Cairo',
+                        color: secondaryTextColor,
+                      ),
+                    ),
+                    const SizedBox(height: 22),
 
-      sectionTitle('المريض المرتبط'),
-      patientProfileCard(),
+                    sectionTitle('المريض المرتبط'),
+                    patientProfileCard(),
 
-      const SizedBox(height: 18),
-      sectionTitle('الحالة الصحية'),
-      healthStatusCard(),
+                    const SizedBox(height: 18),
+                    sectionTitle('الحالة الصحية'),
+                    healthStatusCard(),
 
-      const SizedBox(height: 18),
-      sectionTitle('الطوارئ'),
-      sosCard(),
+                    const SizedBox(height: 18),
+                    sectionTitle('الطوارئ'),
+                    sosCard(),
 
-      const SizedBox(height: 18),
-      sectionTitle('الخدمات السريعة'),
-      quickActions(),
+                    const SizedBox(height: 18),
+                    sectionTitle('الخدمات السريعة'),
+                    quickActions(),
 
-      const SizedBox(height: 24),
-    ],
-  ),
-),
+                    const SizedBox(height: 24),
+                  ],
+                ),
+              ),
       ),
     );
   }
@@ -809,38 +924,239 @@ class CaregiverPatientDetailsScreen extends StatelessWidget {
   }
 }
 
-class CaregiverNotificationsScreen extends StatelessWidget {
+class CaregiverNotificationsScreen extends StatefulWidget {
   const CaregiverNotificationsScreen({super.key});
 
   @override
+  State<CaregiverNotificationsScreen> createState() =>
+      _CaregiverNotificationsScreenState();
+}
+
+class _CaregiverNotificationsScreenState
+    extends State<CaregiverNotificationsScreen> {
+  static const Color primaryColor = Color(0xFF1E3A5F);
+  static const Color backgroundColor = Color(0xFFF7F8FA);
+  static const Color textColor = Color(0xFF1F2937);
+  static const Color secondaryTextColor = Color(0xFF4B5563);
+  static const Color dangerColor = Color(0xFFD32F2F);
+  static const Color warningColor = Color(0xFFED6C02);
+
+  bool loading = true;
+  String? patientId;
+  String? patientPhone;
+  String? patientOriginalPhone;
+  String? caregiverId;
+
+  @override
+  void initState() {
+    super.initState();
+    loadLinkedPatient();
+  }
+
+  Future<void> loadLinkedPatient() async {
+    try {
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      caregiverId = uid;
+
+      if (uid == null) {
+        if (mounted) setState(() => loading = false);
+        return;
+      }
+
+      final caregiverDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(uid)
+          .get();
+
+      final caregiver = caregiverDoc.data() ?? {};
+      final linkedPhone =
+          (caregiver['linkedPatientPhone'] ??
+                  caregiver['linkedPhone'] ??
+                  caregiver['linkedPhoneNumber'] ??
+                  '')
+              .toString()
+              .trim();
+
+      if (linkedPhone.isNotEmpty) {
+        final patientQuery = await FirebaseFirestore.instance
+            .collection('users')
+            .where('phone', isEqualTo: linkedPhone)
+            .where('role', isEqualTo: 'مريض')
+            .limit(1)
+            .get();
+
+        if (patientQuery.docs.isNotEmpty) {
+          final doc = patientQuery.docs.first;
+          final patient = doc.data();
+          patientId = doc.id;
+          patientPhone = (patient['phone'] ?? '').toString();
+          patientOriginalPhone = (patient['originalPhone'] ?? '').toString();
+        }
+      }
+    } catch (e) {
+      debugPrint('Caregiver notifications load error: $e');
+    }
+
+    if (mounted) setState(() => loading = false);
+  }
+
+  IconData getIcon(String type) {
+    switch (type) {
+      case 'medication':
+        return Icons.medication_outlined;
+      case 'warning':
+        return Icons.warning_amber_rounded;
+      case 'sos':
+        return Icons.sos;
+      default:
+        return Icons.notifications_rounded;
+    }
+  }
+
+  Color getColor(String type) {
+    switch (type) {
+      case 'sos':
+        return dangerColor;
+      case 'warning':
+        return warningColor;
+      default:
+        return primaryColor;
+    }
+  }
+
+  String formatTime(dynamic timestamp) {
+    if (timestamp == null || timestamp is! Timestamp) return '';
+    final date = timestamp.toDate();
+    int hour = date.hour;
+    final minute = date.minute;
+    final period = hour >= 12 ? 'مساءً' : 'صباحًا';
+    if (hour > 12) hour -= 12;
+    if (hour == 0) hour = 12;
+    return '${hour.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')} $period';
+  }
+
+  Future<List<QueryDocumentSnapshot<Map<String, dynamic>>>>
+  loadNotifications() async {
+    final ids = <String>{
+      if (caregiverId != null && caregiverId!.isNotEmpty) caregiverId!,
+    };
+
+    final patientIds = <String>{
+      if (patientId != null && patientId!.isNotEmpty) patientId!,
+    };
+
+    final phones = <String>{
+      if (patientPhone != null && patientPhone!.isNotEmpty) patientPhone!,
+      if (patientOriginalPhone != null && patientOriginalPhone!.isNotEmpty)
+        patientOriginalPhone!,
+    };
+
+    final Map<String, QueryDocumentSnapshot<Map<String, dynamic>>> result = {};
+
+    Future<void> addQuery(Query<Map<String, dynamic>> query) async {
+      try {
+        final snap = await query.get();
+        for (final doc in snap.docs) {
+          result[doc.id] = doc;
+        }
+      } catch (e) {
+        debugPrint('Notification query ignored: $e');
+      }
+    }
+
+    for (final id in ids) {
+      await addQuery(
+        FirebaseFirestore.instance
+            .collection('notifications')
+            .where('caregiverId', isEqualTo: id),
+      );
+      await addQuery(
+        FirebaseFirestore.instance
+            .collection('notifications')
+            .where('recipientId', isEqualTo: id),
+      );
+    }
+
+    for (final id in patientIds) {
+      await addQuery(
+        FirebaseFirestore.instance
+            .collection('notifications')
+            .where('patientId', isEqualTo: id),
+      );
+      await addQuery(
+        FirebaseFirestore.instance
+            .collection('notifications')
+            .where('userId', isEqualTo: id),
+      );
+    }
+
+    for (final phone in phones) {
+      await addQuery(
+        FirebaseFirestore.instance
+            .collection('notifications')
+            .where('patientPhone', isEqualTo: phone),
+      );
+    }
+
+    final docs = result.values.where((doc) {
+      final data = doc.data();
+      final nCaregiverId = (data['caregiverId'] ?? data['recipientId'] ?? '')
+          .toString();
+      final nPatientId = (data['patientId'] ?? data['userId'] ?? '').toString();
+      final nPatientPhone = (data['patientPhone'] ?? '').toString();
+
+      final matchesCaregiver =
+          caregiverId != null &&
+          caregiverId!.isNotEmpty &&
+          nCaregiverId == caregiverId;
+      final matchesPatient =
+          patientId != null && patientId!.isNotEmpty && nPatientId == patientId;
+      final matchesPhone =
+          nPatientPhone.isNotEmpty && phones.contains(nPatientPhone);
+
+      return matchesCaregiver || matchesPatient || matchesPhone;
+    }).toList();
+
+    docs.sort((a, b) {
+      final aTime = a.data()['createdAt'];
+      final bTime = b.data()['createdAt'];
+      if (aTime is Timestamp && bTime is Timestamp) {
+        return bTime.compareTo(aTime);
+      }
+      return 0;
+    });
+
+    return docs;
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final notifications = [
-      {
-        'icon': Icons.warning_amber_rounded,
-        'title': 'حالة طارئة',
-        'body': 'إذا ضغط المريض SOS ستظهر هنا.',
-        'color': Color(0xFFD32F2F),
-      },
-      {
-        'icon': Icons.monitor_heart,
-        'title': 'تنبيه صحي',
-        'body': 'أي قراءة خطرة أو غير طبيعية ستظهر هنا.',
-        'color': Color(0xFFED6C02),
-      },
-      {
-        'icon': Icons.medication,
-        'title': 'تنبيه دواء',
-        'body': 'إذا لم يأخذ المريض الدواء سيظهر التنبيه هنا.',
-        'color': Color(0xFF1E3A5F),
-      },
-    ];
+    if (loading) {
+      return const Directionality(
+        textDirection: TextDirection.rtl,
+        child: Scaffold(
+          backgroundColor: backgroundColor,
+          body: Center(child: CircularProgressIndicator()),
+        ),
+      );
+    }
+
+    if (caregiverId == null) {
+      return const Directionality(
+        textDirection: TextDirection.rtl,
+        child: Scaffold(
+          backgroundColor: backgroundColor,
+          body: Center(child: Text('يجب تسجيل الدخول أولاً')),
+        ),
+      );
+    }
 
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
-        backgroundColor: const Color(0xFFF7F8FA),
+        backgroundColor: backgroundColor,
         appBar: AppBar(
-          backgroundColor: const Color(0xFF1E3A5F),
+          backgroundColor: primaryColor,
           title: const Text(
             'تنبيهات المرافق',
             style: TextStyle(
@@ -850,50 +1166,105 @@ class CaregiverNotificationsScreen extends StatelessWidget {
             ),
           ),
         ),
-        body: ListView.builder(
-          padding: const EdgeInsets.all(20),
-          itemCount: notifications.length,
-          itemBuilder: (context, index) {
-            final item = notifications[index];
-            final color = item['color'] as Color;
+        body: FutureBuilder<List<QueryDocumentSnapshot<Map<String, dynamic>>>>(
+          future: loadNotifications(),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator());
+            }
 
-            return Container(
-              margin: const EdgeInsets.only(bottom: 14),
-              padding: const EdgeInsets.all(18),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(22),
-              ),
-              child: Row(
-                children: [
-                  Icon(item['icon'] as IconData, color: color, size: 34),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+            if (snapshot.hasError) {
+              return const Center(
+                child: Text(
+                  'حدث خطأ أثناء تحميل التنبيهات',
+                  style: TextStyle(
+                    fontFamily: 'Cairo',
+                    fontSize: 18,
+                    color: textColor,
+                  ),
+                ),
+              );
+            }
+
+            final notifications = snapshot.data ?? [];
+
+            if (notifications.isEmpty) {
+              return const Center(
+                child: Text(
+                  'لا توجد تنبيهات لهذا المريض حالياً',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontFamily: 'Cairo',
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: secondaryTextColor,
+                  ),
+                ),
+              );
+            }
+
+            return RefreshIndicator(
+              onRefresh: () async => setState(() {}),
+              child: ListView.separated(
+                padding: const EdgeInsets.all(20),
+                itemCount: notifications.length,
+                separatorBuilder: (_, _) => const SizedBox(height: 14),
+                itemBuilder: (context, index) {
+                  final data = notifications[index].data();
+                  final type = (data['type'] ?? 'general').toString();
+                  final color = getColor(type);
+
+                  return Container(
+                    padding: const EdgeInsets.all(18),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(22),
+                      border: Border.all(color: color.withOpacity(0.20)),
+                    ),
+                    child: Row(
                       children: [
-                        Text(
-                          item['title'] as String,
-                          style: TextStyle(
-                            fontSize: 20,
-                            fontFamily: 'Cairo',
-                            fontWeight: FontWeight.bold,
-                            color: color,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          item['body'] as String,
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontFamily: 'Cairo',
-                            color: Color(0xFF4B5563),
+                        Icon(getIcon(type), color: color, size: 34),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                (data['title'] ?? 'تنبيه').toString(),
+                                style: TextStyle(
+                                  fontSize: 20,
+                                  fontFamily: 'Cairo',
+                                  fontWeight: FontWeight.bold,
+                                  color: color,
+                                ),
+                              ),
+                              const SizedBox(height: 5),
+                              Text(
+                                (data['message'] ?? '').toString(),
+                                style: const TextStyle(
+                                  fontSize: 16,
+                                  fontFamily: 'Cairo',
+                                  color: textColor,
+                                  height: 1.5,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                (data['time'] ?? formatTime(data['createdAt']))
+                                    .toString(),
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  fontFamily: 'Cairo',
+                                  color: secondaryTextColor,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ],
                     ),
-                  ),
-                ],
+                  );
+                },
               ),
             );
           },

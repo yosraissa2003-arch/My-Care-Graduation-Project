@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:geolocator/geolocator.dart';
 
 class AddHealthDataScreen extends StatefulWidget {
   const AddHealthDataScreen({super.key});
@@ -9,8 +11,6 @@ class AddHealthDataScreen extends StatefulWidget {
 }
 
 class _AddHealthDataScreenState extends State<AddHealthDataScreen> {
-  final String uid = "1sxPcUvNOJRS88X7xtDlx4Te5v62";
-
   final heartRateController = TextEditingController();
   final systolicController = TextEditingController();
   final diastolicController = TextEditingController();
@@ -34,6 +34,34 @@ class _AddHealthDataScreenState extends State<AddHealthDataScreen> {
     oxygenController.dispose();
     temperatureController.dispose();
     super.dispose();
+  }
+
+  Future<Position?> _getCurrentPosition() async {
+    try {
+      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) return null;
+
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        return null;
+      }
+
+      try {
+        return await Geolocator.getCurrentPosition(
+          desiredAccuracy: LocationAccuracy.high,
+          timeLimit: const Duration(seconds: 12),
+        );
+      } catch (_) {
+        return await Geolocator.getLastKnownPosition();
+      }
+    } catch (_) {
+      return null;
+    }
   }
 
   Map<String, String> analyzeHealth({
@@ -77,6 +105,23 @@ class _AddHealthDataScreenState extends State<AddHealthDataScreen> {
   }
 
   Future<void> saveHealthData() async {
+    final currentUser = FirebaseAuth.instance.currentUser;
+
+    if (currentUser == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'يجب تسجيل الدخول أولاً',
+            textAlign: TextAlign.right,
+            style: TextStyle(fontSize: 18),
+          ),
+        ),
+      );
+      return;
+    }
+
+    final uid = currentUser.uid;
+
     if (heartRateController.text.trim().isEmpty ||
         systolicController.text.trim().isEmpty ||
         diastolicController.text.trim().isEmpty ||
@@ -95,88 +140,218 @@ class _AddHealthDataScreenState extends State<AddHealthDataScreen> {
       return;
     }
 
+    final heartRate = int.tryParse(heartRateController.text.trim());
+    final systolic = int.tryParse(systolicController.text.trim());
+    final diastolic = int.tryParse(diastolicController.text.trim());
+    final glucose = int.tryParse(glucoseController.text.trim());
+    final oxygen = int.tryParse(oxygenController.text.trim());
+    final temperature = double.tryParse(
+      temperatureController.text.trim().replaceAll(',', '.'),
+    );
+
+    if (heartRate == null ||
+        systolic == null ||
+        diastolic == null ||
+        glucose == null ||
+        oxygen == null ||
+        temperature == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'تأكدي أن جميع القيم أرقام صحيحة',
+            textAlign: TextAlign.right,
+            style: TextStyle(fontSize: 18),
+          ),
+        ),
+      );
+      return;
+    }
+
     setState(() {
       isLoading = true;
     });
 
-    final heartRate = int.parse(heartRateController.text.trim());
-    final systolic = int.parse(systolicController.text.trim());
-    final diastolic = int.parse(diastolicController.text.trim());
-    final glucose = int.parse(glucoseController.text.trim());
-    final oxygen = int.parse(oxygenController.text.trim());
-    final temperature = double.parse(temperatureController.text.trim());
+    try {
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(uid)
+          .get();
 
-    final aiResult = analyzeHealth(
-      heartRate: heartRate,
-      systolic: systolic,
-      diastolic: diastolic,
-      glucose: glucose,
-      oxygen: oxygen,
-      temperature: temperature,
-    );
+      final userData = userDoc.data() ?? {};
+      final patientName =
+          (userData['fullName'] ??
+                  userData['name'] ??
+                  currentUser.displayName ??
+                  'المريض')
+              .toString();
 
-    await FirebaseFirestore.instance.collection('healthLogs').add({
-      'userId': uid,
-      'heartRate': heartRate,
-      'bloodPressureSystolic': systolic,
-      'bloodPressureDiastolic': diastolic,
-      'glucose': glucose,
-      'oxygen': oxygen,
-      'temperature': temperature,
-      'aiStatus': aiResult['status'],
-      'aiMessage': aiResult['message'],
-      'createdAt': Timestamp.now(),
-    });
+      final patientPhone = (userData['phone'] ?? '').toString();
+      final emergencyPhone = (userData['emergencyContact'] ?? '').toString();
 
-    if (aiResult['status'] == 'Warning' || aiResult['status'] == 'Critical') {
-      await FirebaseFirestore.instance.collection('notifications').add({
-        'title': aiResult['status'] == 'Critical'
-            ? 'تنبيه صحي خطير'
-            : 'تنبيه صحي',
-        'message': aiResult['message'],
-        'type': 'warning',
-        'time': aiResult['status'] == 'Critical' ? 'حالة خطيرة' : 'تحذير',
-        'isRead': false,
-        'createdAt': Timestamp.now(),
-      });
-    }
+      String caregiverId = '';
+      final linkedCaregiverPhone =
+          (userData['linkedPhone'] ??
+                  userData['linkedPatientPhone'] ??
+                  userData['linkedPhoneNumber'] ??
+                  '')
+              .toString();
 
-    if (aiResult['status'] == 'Critical') {
-      await FirebaseFirestore.instance.collection('sosAlerts').add({
+      final possibleCaregiverPhones = <String>{
+        if (linkedCaregiverPhone.trim().isNotEmpty) linkedCaregiverPhone.trim(),
+        if (emergencyPhone.trim().isNotEmpty) emergencyPhone.trim(),
+      };
+
+      for (final phone in possibleCaregiverPhones) {
+        final caregiverQuery = await FirebaseFirestore.instance
+            .collection('users')
+            .where('phone', isEqualTo: phone)
+            .where('role', whereIn: ['مرافق', 'معتني'])
+            .limit(1)
+            .get();
+
+        if (caregiverQuery.docs.isNotEmpty) {
+          caregiverId = caregiverQuery.docs.first.id;
+          break;
+        }
+      }
+
+      final aiResult = analyzeHealth(
+        heartRate: heartRate,
+        systolic: systolic,
+        diastolic: diastolic,
+        glucose: glucose,
+        oxygen: oxygen,
+        temperature: temperature,
+      );
+
+      final healthData = {
         'userId': uid,
-        'source': 'ai',
-        'status': 'active',
-        'message': 'تم اكتشاف حالة صحية خطيرة بواسطة AI',
+        'patientId': uid,
+        'patientName': patientName,
+        'patientPhone': patientPhone,
+        'heartRate': heartRate,
+        'bloodPressureSystolic': systolic,
+        'bloodPressureDiastolic': diastolic,
+        'bloodPressure': '$systolic/$diastolic',
+        'glucose': glucose,
+        'sugar': glucose,
+        'oxygen': oxygen,
+        'temperature': temperature,
+        'aiStatus': aiResult['status'],
+        'aiMessage': aiResult['message'],
         'createdAt': Timestamp.now(),
-      });
+      };
 
-      await FirebaseFirestore.instance.collection('notifications').add({
-        'title': 'تنبيه طوارئ SOS',
-        'message': 'تم اكتشاف حالة صحية خطيرة بواسطة AI',
-        'type': 'sos',
-        'time': 'طوارئ',
-        'isRead': false,
-        'createdAt': Timestamp.now(),
-      });
-    }
-    setState(() {
-      isLoading = false;
-    });
+      await FirebaseFirestore.instance.collection('healthLogs').add(healthData);
 
-    if (!mounted) return;
+      await FirebaseFirestore.instance.collection('users').doc(uid).set({
+        'lastHealthReading': healthData,
+        'lastAiStatus': aiResult['status'],
+        'lastAiMessage': aiResult['message'],
+        'lastReadingAt': Timestamp.now(),
+      }, SetOptions(merge: true));
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        backgroundColor: green,
-        content: Text(
-          'تم الحفظ - الحالة: ${aiResult['status']}',
-          textAlign: TextAlign.right,
-          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+      if (aiResult['status'] == 'Warning' || aiResult['status'] == 'Critical') {
+        await FirebaseFirestore.instance.collection('notifications').add({
+          'userId': uid,
+          'patientId': uid,
+          'caregiverId': caregiverId,
+          'recipientId': caregiverId,
+          'linkedCaregiverPhone': linkedCaregiverPhone,
+          'emergencyPhone': emergencyPhone,
+          'patientName': patientName,
+          'patientPhone': patientPhone,
+          'title': aiResult['status'] == 'Critical'
+              ? 'تنبيه صحي خطير'
+              : 'تنبيه صحي',
+          'message': aiResult['message'],
+          'type': 'warning',
+          'time': aiResult['status'] == 'Critical' ? 'حالة خطيرة' : 'تحذير',
+          'isRead': false,
+          'createdAt': Timestamp.now(),
+        });
+      }
+
+      if (aiResult['status'] == 'Critical') {
+        final position = await _getCurrentPosition();
+        final hasLocation = position != null;
+
+        await FirebaseFirestore.instance.collection('sosAlerts').add({
+          'userId': uid,
+          'patientId': uid,
+          'caregiverId': caregiverId,
+          'linkedCaregiverPhone': linkedCaregiverPhone,
+          'patientName': patientName,
+          'patientPhone': patientPhone,
+          'emergencyPhone': emergencyPhone,
+          'source': 'ai',
+          'status': 'active',
+          'message': 'تم اكتشاف حالة صحية خطيرة بواسطة AI',
+          'locationAvailable': hasLocation,
+          'latitude': position?.latitude,
+          'longitude': position?.longitude,
+          'location': hasLocation
+              ? {'latitude': position.latitude, 'longitude': position.longitude}
+              : null,
+          'createdAt': Timestamp.now(),
+        });
+
+        await FirebaseFirestore.instance.collection('notifications').add({
+          'userId': uid,
+          'patientId': uid,
+          'caregiverId': caregiverId,
+          'recipientId': caregiverId,
+          'linkedCaregiverPhone': linkedCaregiverPhone,
+          'emergencyPhone': emergencyPhone,
+          'patientName': patientName,
+          'patientPhone': patientPhone,
+          'title': 'تنبيه طوارئ SOS',
+          'message': hasLocation
+              ? 'تم اكتشاف حالة صحية خطيرة بواسطة AI وتم إرفاق موقع المريض'
+              : 'تم اكتشاف حالة صحية خطيرة بواسطة AI ولم يتم الحصول على الموقع',
+          'type': 'sos',
+          'time': 'طوارئ',
+          'isRead': false,
+          'locationAvailable': hasLocation,
+          'latitude': position?.latitude,
+          'longitude': position?.longitude,
+          'createdAt': Timestamp.now(),
+        });
+      }
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: green,
+          content: Text(
+            'تم الحفظ - الحالة: ${aiResult['status']}',
+            textAlign: TextAlign.right,
+            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+          ),
         ),
-      ),
-    );
+      );
 
-    Navigator.pop(context);
+      Navigator.pop(context);
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'حدث خطأ أثناء حفظ القراءة',
+            textAlign: TextAlign.right,
+            style: TextStyle(fontSize: 18),
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          isLoading = false;
+        });
+      }
+    }
   }
 
   @override
@@ -298,7 +473,7 @@ class _AddHealthDataScreenState extends State<AddHealthDataScreen> {
   }) {
     return TextField(
       controller: controller,
-      keyboardType: TextInputType.number,
+      keyboardType: const TextInputType.numberWithOptions(decimal: true),
       textAlign: TextAlign.right,
       style: const TextStyle(
         fontSize: 32,

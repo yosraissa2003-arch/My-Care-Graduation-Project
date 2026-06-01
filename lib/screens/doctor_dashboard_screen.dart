@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'doctor_patient_details_screen.dart';
+import 'package:mycare/screens/login_screen.dart';
 
 class DoctorDashboardScreen extends StatefulWidget {
   const DoctorDashboardScreen({super.key});
@@ -258,6 +259,23 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
               color: Colors.white,
             ),
           ),
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.logout, color: Colors.white),
+              tooltip: 'تسجيل الخروج',
+              onPressed: () async {
+                await FirebaseAuth.instance.signOut();
+
+                if (!mounted) return;
+
+                Navigator.pushAndRemoveUntil(
+                  context,
+                  MaterialPageRoute(builder: (_) => const LoginScreen()),
+                  (route) => false,
+                );
+              },
+            ),
+          ],
         ),
         body: FutureBuilder<Map<String, dynamic>>(
           future: loadDoctorData(),

@@ -1,9 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
-class NotificationsScreen extends StatelessWidget {
+class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({super.key});
 
+  @override
+  State<NotificationsScreen> createState() => _NotificationsScreenState();
+}
+
+class _NotificationsScreenState extends State<NotificationsScreen> {
   IconData getIcon(String type) {
     switch (type) {
       case 'medication':
@@ -31,18 +37,65 @@ class NotificationsScreen extends StatelessWidget {
   }
 
   String formatTime(dynamic timestamp) {
-    if (timestamp == null) return '';
-
-    final DateTime date = (timestamp as Timestamp).toDate();
-
+    if (timestamp == null || timestamp is! Timestamp) return '';
+    final DateTime date = timestamp.toDate();
     int hour = date.hour;
     final int minute = date.minute;
     final String period = hour >= 12 ? 'مساءً' : 'صباحًا';
-
     if (hour > 12) hour -= 12;
     if (hour == 0) hour = 12;
-
     return '${hour.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')} $period';
+  }
+
+  Future<List<QueryDocumentSnapshot<Map<String, dynamic>>>>
+  loadMyNotifications() async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return [];
+
+    final Map<String, QueryDocumentSnapshot<Map<String, dynamic>>> result = {};
+
+    Future<void> addQuery(Query<Map<String, dynamic>> query) async {
+      try {
+        final snap = await query.get();
+        for (final doc in snap.docs) {
+          result[doc.id] = doc;
+        }
+      } catch (e) {
+        debugPrint('Notifications query ignored: $e');
+      }
+    }
+
+    await addQuery(
+      FirebaseFirestore.instance
+          .collection('notifications')
+          .where('userId', isEqualTo: uid),
+    );
+    await addQuery(
+      FirebaseFirestore.instance
+          .collection('notifications')
+          .where('patientId', isEqualTo: uid),
+    );
+    await addQuery(
+      FirebaseFirestore.instance
+          .collection('notifications')
+          .where('caregiverId', isEqualTo: uid),
+    );
+    await addQuery(
+      FirebaseFirestore.instance
+          .collection('notifications')
+          .where('recipientId', isEqualTo: uid),
+    );
+
+    final docs = result.values.toList();
+    docs.sort((a, b) {
+      final aTime = a.data()['createdAt'];
+      final bTime = b.data()['createdAt'];
+      if (aTime is Timestamp && bTime is Timestamp) {
+        return bTime.compareTo(aTime);
+      }
+      return 0;
+    });
+    return docs;
   }
 
   void openRelatedScreen(BuildContext context, String type) {
@@ -74,11 +127,8 @@ class NotificationsScreen extends StatelessWidget {
             ),
           ),
         ),
-        body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-          stream: FirebaseFirestore.instance
-              .collection('notifications')
-              .orderBy('createdAt', descending: true)
-              .snapshots(),
+        body: FutureBuilder<List<QueryDocumentSnapshot<Map<String, dynamic>>>>(
+          future: loadMyNotifications(),
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
               return const Center(
@@ -99,7 +149,7 @@ class NotificationsScreen extends StatelessWidget {
               );
             }
 
-            final notifications = snapshot.data?.docs ?? [];
+            final notifications = snapshot.data ?? [];
 
             if (notifications.isEmpty) {
               return const Center(
@@ -114,26 +164,29 @@ class NotificationsScreen extends StatelessWidget {
               );
             }
 
-            return ListView.separated(
-              padding: const EdgeInsets.all(20),
-              itemCount: notifications.length,
-              separatorBuilder: (_, _) => const SizedBox(height: 16),
-              itemBuilder: (context, index) {
-                final data = notifications[index].data();
+            return RefreshIndicator(
+              onRefresh: () async => setState(() {}),
+              child: ListView.separated(
+                padding: const EdgeInsets.all(20),
+                itemCount: notifications.length,
+                separatorBuilder: (_, _) => const SizedBox(height: 16),
+                itemBuilder: (context, index) {
+                  final data = notifications[index].data();
+                  final String type = (data['type'] ?? 'general').toString();
 
-                final String type = data['type'] ?? 'general';
-
-                return InkWell(
-                  borderRadius: BorderRadius.circular(22),
-                  onTap: () => openRelatedScreen(context, type),
-                  child: NotificationCard(
-                    title: data['title'] ?? 'تنبيه',
-                    message: data['message'] ?? '',
-                    time: data['time'] ?? formatTime(data['createdAt']),
-                    type: type,
-                  ),
-                );
-              },
+                  return InkWell(
+                    borderRadius: BorderRadius.circular(22),
+                    onTap: () => openRelatedScreen(context, type),
+                    child: NotificationCard(
+                      title: (data['title'] ?? 'تنبيه').toString(),
+                      message: (data['message'] ?? '').toString(),
+                      time: (data['time'] ?? formatTime(data['createdAt']))
+                          .toString(),
+                      type: type,
+                    ),
+                  );
+                },
+              ),
             );
           },
         ),
