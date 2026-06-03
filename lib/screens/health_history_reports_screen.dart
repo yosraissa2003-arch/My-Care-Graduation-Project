@@ -1,124 +1,141 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class HealthHistoryReportsScreen extends StatelessWidget {
   const HealthHistoryReportsScreen({super.key});
 
-  final String uid = "1sxPcUvNOJRS88X7xtDlx4Te5v62";
-
   static const Color dark = Color(0xff172638);
   static const Color green = Color(0xff2E8B57);
-
   static const Color softGreen = Color(0xffEEF8F1);
   static const Color softOrange = Color(0xffFFF7ED);
   static const Color softRed = Color(0xffFFF0F0);
   static const Color softBlue = Color(0xffF1F8FC);
   static const Color softPurple = Color(0xffF7F3FF);
-
   static const Color border = Color(0xffE5E5E5);
 
   @override
   Widget build(BuildContext context) {
+    final user = FirebaseAuth.instance.currentUser;
+
+    if (user == null) {
+      return const Scaffold(
+        body: Center(
+          child: Text(
+            'يجب تسجيل الدخول أولاً',
+            style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+          ),
+        ),
+      );
+    }
+
+    final uid = user.uid;
+
     return Directionality(
       textDirection: TextDirection.rtl,
-
       child: Scaffold(
         backgroundColor: Colors.white,
-
         appBar: AppBar(
           backgroundColor: Colors.white,
           elevation: 0,
           centerTitle: true,
-
           automaticallyImplyLeading: false,
-
           leading: IconButton(
-            onPressed: () {
-              Navigator.pop(context);
-            },
+            onPressed: () => Navigator.pop(context),
             icon: const Icon(
               Icons.arrow_back_ios_new_rounded,
               color: dark,
               size: 28,
             ),
           ),
-
           title: const Text(
             'التقارير الصحية',
-
             style: TextStyle(
               color: dark,
               fontSize: 30,
               fontWeight: FontWeight.w900,
+              fontFamily: 'Cairo',
             ),
           ),
         ),
-
         body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
           stream: FirebaseFirestore.instance
               .collection('healthLogs')
               .where('userId', isEqualTo: uid)
               .snapshots(),
-
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
               return const Center(child: CircularProgressIndicator());
             }
 
-            final docs = snapshot.data?.docs ?? [];
-
-            if (docs.isEmpty) {
+            if (snapshot.hasError) {
               return const Center(
                 child: Text(
-                  'لا توجد تقارير صحية بعد',
-
+                  'حدث خطأ أثناء تحميل التقارير',
                   style: TextStyle(
-                    fontSize: 25,
+                    fontSize: 22,
                     fontWeight: FontWeight.w900,
                     color: dark,
+                    fontFamily: 'Cairo',
                   ),
                 ),
               );
             }
 
+            final docs = [...(snapshot.data?.docs ?? [])];
+
             docs.sort((a, b) {
-              final aTime = a.data()['createdAt'] as Timestamp;
-
-              final bTime = b.data()['createdAt'] as Timestamp;
-
-              return bTime.compareTo(aTime);
+              final aTime = a.data()['createdAt'];
+              final bTime = b.data()['createdAt'];
+              if (aTime is Timestamp && bTime is Timestamp) {
+                return bTime.compareTo(aTime);
+              }
+              return 0;
             });
+
+            if (docs.isEmpty) {
+              return const Center(
+                child: Text(
+                  'لا توجد تقارير صحية بعد',
+                  style: TextStyle(
+                    fontSize: 25,
+                    fontWeight: FontWeight.w900,
+                    color: dark,
+                    fontFamily: 'Cairo',
+                  ),
+                ),
+              );
+            }
 
             final reports = docs.map((doc) {
               final data = doc.data();
-
               final heartRate = _toInt(data['heartRate']);
-
               final systolic = _toInt(data['bloodPressureSystolic']);
-
               final diastolic = _toInt(data['bloodPressureDiastolic']);
-
-              final glucose = _toInt(data['glucose']);
-
+              final glucose = _toInt(data['glucose'] ?? data['sugar']);
+              final oxygen = _toInt(data['oxygen'] ?? data['oxygenLevel']);
               final temperature = _toDouble(data['temperature']);
-
-              final createdAt = data['createdAt'] as Timestamp;
-
-              final date = createdAt.toDate();
-
-              final status = getHealthStatus(
-                heartRate: heartRate,
-                systolic: systolic,
-                diastolic: diastolic,
-                glucose: glucose,
-                temperature: temperature,
-              );
+              final createdAt = data['createdAt'];
+              final date = createdAt is Timestamp
+                  ? createdAt.toDate()
+                  : DateTime.now();
+              final status = (data['aiStatus'] ?? '').toString().isNotEmpty
+                  ? _arabicStatus(data['aiStatus'].toString())
+                  : getHealthStatus(
+                      heartRate: heartRate,
+                      systolic: systolic,
+                      diastolic: diastolic,
+                      glucose: glucose,
+                      oxygen: oxygen,
+                      temperature: temperature,
+                    );
 
               return HealthReport(
                 heartRate: heartRate,
                 systolic: systolic,
                 diastolic: diastolic,
                 glucose: glucose,
+                oxygen: oxygen,
                 temperature: temperature,
                 status: status,
                 date: date,
@@ -126,305 +143,87 @@ class HealthHistoryReportsScreen extends StatelessWidget {
             }).toList();
 
             final latest = reports.first;
-
             final criticalCount = reports
                 .where((r) => r.status == 'خطر')
                 .length;
-
             final avgHeart =
                 reports.map((r) => r.heartRate).reduce((a, b) => a + b) /
                 reports.length;
-
             final avgGlucose =
                 reports.map((r) => r.glucose).reduce((a, b) => a + b) /
                 reports.length;
 
-            return ListView(
-              padding: const EdgeInsets.all(18),
-
-              children: [
-                /// الحالة العامة
-                Container(
-                  width: double.infinity,
-
-                  padding: const EdgeInsets.all(22),
-
-                  decoration: BoxDecoration(
-                    color: _statusBg(latest.status),
-
-                    borderRadius: BorderRadius.circular(26),
-
-                    border: Border.all(color: border),
-                  ),
-
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.end,
-
-                              children: [
-                                const Text(
-                                  'الحالة الصحية العامة',
-
-                                  textAlign: TextAlign.right,
-
-                                  style: TextStyle(
-                                    fontSize: 22,
-
-                                    fontWeight: FontWeight.w800,
-
-                                    color: dark,
-                                  ),
-                                ),
-
-                                const SizedBox(height: 6),
-
-                                Text(
-                                  latest.status,
-
-                                  textAlign: TextAlign.right,
-
-                                  style: TextStyle(
-                                    fontSize: 34,
-
-                                    fontWeight: FontWeight.w900,
-
-                                    color: _statusColor(latest.status),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-
-                          const SizedBox(width: 14),
-
-                          Container(
-                            width: 70,
-                            height: 70,
-
-                            decoration: const BoxDecoration(
-                              color: Colors.white,
-
-                              shape: BoxShape.circle,
-                            ),
-
-                            child: Icon(
-                              _statusIcon(latest.status),
-
-                              color: _statusColor(latest.status),
-
-                              size: 42,
-                            ),
-                          ),
-                        ],
-                      ),
-
-                      const SizedBox(height: 18),
-
-                      Text(
-                        'آخر تحديث: '
-                        '${latest.date.day}/${latest.date.month}/${latest.date.year}'
-                        ' - '
-                        '${latest.date.hour}:${latest.date.minute.toString().padLeft(2, '0')}',
-
-                        textAlign: TextAlign.right,
-
-                        style: const TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w800,
-
-                          color: dark,
-                        ),
-                      ),
-
-                      const SizedBox(height: 6),
-
-                      Text(
-                        'عدد القراءات: ${reports.length}'
-                        ' | '
-                        'الحالات الخطرة: $criticalCount',
-
-                        textAlign: TextAlign.right,
-
-                        style: const TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w800,
-
-                          color: dark,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-
-                const SizedBox(height: 18),
-
-                /// الكروت الصغيرة
-                Directionality(
-                  textDirection: TextDirection.rtl,
-
-                  child: Row(
+            return RefreshIndicator(
+              onRefresh: () async {},
+              child: ListView(
+                padding: const EdgeInsets.all(18),
+                children: [
+                  _summaryCard(latest, reports.length, criticalCount),
+                  const SizedBox(height: 18),
+                  Row(
                     children: [
                       Expanded(
                         child: _smallStatCard(
                           title: 'عدد القراءات',
-
                           value: reports.length.toString(),
-
                           icon: Icons.folder_copy_outlined,
-
                           bgColor: softBlue,
-
                           iconColor: const Color(0xff407C99),
                         ),
                       ),
-
                       const SizedBox(width: 10),
-
                       Expanded(
                         child: _smallStatCard(
                           title: 'حالات خطر',
-
                           value: criticalCount.toString(),
-
                           icon: Icons.warning_amber_rounded,
-
                           bgColor: softRed,
-
                           iconColor: Colors.red,
                         ),
                       ),
                     ],
                   ),
-                ),
-
-                const SizedBox(height: 10),
-
-                Directionality(
-                  textDirection: TextDirection.rtl,
-
-                  child: Row(
+                  const SizedBox(height: 10),
+                  Row(
                     children: [
                       Expanded(
                         child: _smallStatCard(
                           title: 'متوسط النبض',
-
                           value: avgHeart.toStringAsFixed(0),
-
                           icon: Icons.favorite_border,
-
                           bgColor: softPurple,
-
                           iconColor: const Color(0xff755BB5),
                         ),
                       ),
-
                       const SizedBox(width: 10),
-
                       Expanded(
                         child: _smallStatCard(
                           title: 'متوسط السكر',
-
                           value: avgGlucose.toStringAsFixed(0),
-
                           icon: Icons.bloodtype_outlined,
-
                           bgColor: softOrange,
-
                           iconColor: const Color(0xffD47443),
                         ),
                       ),
                     ],
                   ),
-                ),
-
-                const SizedBox(height: 22),
-
-                /// تقييم الحالة
-                Container(
-                  width: double.infinity,
-
-                  padding: const EdgeInsets.all(18),
-
-                  decoration: BoxDecoration(
-                    color: softBlue,
-
-                    borderRadius: BorderRadius.circular(22),
-
-                    border: Border.all(color: border),
+                  const SizedBox(height: 22),
+                  _evaluationCard(latest.status),
+                  const SizedBox(height: 24),
+                  const Text(
+                    'سجل القراءات',
+                    textAlign: TextAlign.right,
+                    style: TextStyle(
+                      fontSize: 28,
+                      fontWeight: FontWeight.w900,
+                      color: dark,
+                      fontFamily: 'Cairo',
+                    ),
                   ),
-
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          latest.status == 'خطر'
-                              ? 'تقييم الحالة الصحية: تم اكتشاف قراءة خطيرة، يفضّل مراجعة الطبيب.'
-                              : latest.status == 'تحتاج متابعة'
-                              ? 'تقييم الحالة الصحية: توجد قراءة تحتاج متابعة خلال اليوم.'
-                              : 'تقييم الحالة الصحية: الحالة مستقرة حالياً.',
-
-                          textAlign: TextAlign.right,
-
-                          style: const TextStyle(
-                            fontSize: 21,
-                            fontWeight: FontWeight.w800,
-
-                            color: dark,
-                            height: 1.4,
-                          ),
-                        ),
-                      ),
-
-                      const SizedBox(width: 14),
-
-                      Container(
-                        width: 58,
-                        height: 58,
-
-                        decoration: const BoxDecoration(
-                          color: Colors.white,
-
-                          shape: BoxShape.circle,
-                        ),
-
-                        child: const Icon(
-                          Icons.psychology_alt_outlined,
-
-                          color: Color(0xff407C99),
-
-                          size: 34,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-
-                const SizedBox(height: 24),
-
-                const Text(
-                  'سجل القراءات',
-
-                  textAlign: TextAlign.right,
-
-                  style: TextStyle(
-                    fontSize: 28,
-                    fontWeight: FontWeight.w900,
-                    color: dark,
-                  ),
-                ),
-
-                const SizedBox(height: 14),
-
-                ...reports.map((report) {
-                  return _reportCard(report: report);
-                }),
-              ],
+                  const SizedBox(height: 14),
+                  ...reports.map((report) => _reportCard(report: report)),
+                ],
+              ),
             );
           },
         ),
@@ -432,97 +231,75 @@ class HealthHistoryReportsScreen extends StatelessWidget {
     );
   }
 
-  /// كرت التقرير
-
-  Widget _reportCard({required HealthReport report}) {
+  Widget _summaryCard(HealthReport latest, int count, int criticalCount) {
     return Container(
       width: double.infinity,
-
-      margin: const EdgeInsets.only(bottom: 16),
-
-      padding: const EdgeInsets.all(18),
-
+      padding: const EdgeInsets.all(22),
       decoration: BoxDecoration(
-        color: _statusBg(report.status),
-
-        borderRadius: BorderRadius.circular(22),
-
+        color: _statusBg(latest.status),
+        borderRadius: BorderRadius.circular(26),
         border: Border.all(color: border),
       ),
-
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.end,
-
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
             children: [
               Expanded(
-                child: Text(
-                  'الحالة: ${report.status}',
-
-                  textAlign: TextAlign.right,
-
-                  style: TextStyle(
-                    fontSize: 27,
-                    fontWeight: FontWeight.w900,
-
-                    color: _statusColor(report.status),
-                  ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'الحالة الصحية العامة',
+                      textAlign: TextAlign.right,
+                      style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w800,
+                        color: dark,
+                        fontFamily: 'Cairo',
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      latest.status,
+                      textAlign: TextAlign.right,
+                      style: TextStyle(
+                        fontSize: 34,
+                        fontWeight: FontWeight.w900,
+                        color: _statusColor(latest.status),
+                        fontFamily: 'Cairo',
+                      ),
+                    ),
+                  ],
                 ),
               ),
-
               const SizedBox(width: 14),
-
               Container(
-                width: 58,
-                height: 58,
-
+                width: 70,
+                height: 70,
                 decoration: const BoxDecoration(
                   color: Colors.white,
                   shape: BoxShape.circle,
                 ),
-
                 child: Icon(
-                  _statusIcon(report.status),
-
-                  color: _statusColor(report.status),
-
-                  size: 34,
+                  _statusIcon(latest.status),
+                  color: _statusColor(latest.status),
+                  size: 42,
                 ),
               ),
             ],
           ),
-
-          const SizedBox(height: 18),
-
-          _infoText('النبض: ${report.heartRate}'),
-
-          _infoText(
-            'الضغط: '
-            '${report.systolic}/${report.diastolic}',
-          ),
-
-          _infoText('السكر: ${report.glucose}'),
-
-          _infoText(
-            'درجة الحرارة: '
-            '${report.temperature.toStringAsFixed(1)}',
-          ),
-
-          const SizedBox(height: 12),
-
+          const SizedBox(height: 16),
+          _dateTimeLine('آخر تحديث', latest.date),
+          const SizedBox(height: 8),
           Text(
-            'التاريخ: '
-            '${report.date.day}/${report.date.month}/${report.date.year}'
-            ' - '
-            '${report.date.hour}:${report.date.minute.toString().padLeft(2, '0')}',
-
+            'عدد القراءات: $count  |  الحالات الخطرة: $criticalCount',
             textAlign: TextAlign.right,
-
             style: const TextStyle(
-              fontSize: 20,
+              fontSize: 19,
               fontWeight: FontWeight.w800,
               color: dark,
+              fontFamily: 'Cairo',
             ),
           ),
         ],
@@ -530,7 +307,186 @@ class HealthHistoryReportsScreen extends StatelessWidget {
     );
   }
 
-  /// الكروت الصغيرة
+  Widget _evaluationCard(String status) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: softBlue,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: border),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              status == 'خطر'
+                  ? 'تقييم الحالة الصحية: تم اكتشاف قراءة خطيرة، يفضّل مراجعة الطبيب.'
+                  : status == 'تحتاج متابعة'
+                  ? 'تقييم الحالة الصحية: توجد قراءة تحتاج متابعة خلال اليوم.'
+                  : 'تقييم الحالة الصحية: الحالة مستقرة حالياً.',
+              textAlign: TextAlign.right,
+              style: const TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w800,
+                color: dark,
+                height: 1.5,
+                fontFamily: 'Cairo',
+              ),
+            ),
+          ),
+          const SizedBox(width: 14),
+          Container(
+            width: 58,
+            height: 58,
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.psychology_alt_outlined,
+              color: Color(0xff407C99),
+              size: 34,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _reportCard({required HealthReport report}) {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: _statusBg(report.status),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'الحالة: ${report.status}',
+                  textAlign: TextAlign.right,
+                  style: TextStyle(
+                    fontSize: 25,
+                    fontWeight: FontWeight.w900,
+                    color: _statusColor(report.status),
+                    fontFamily: 'Cairo',
+                  ),
+                ),
+              ),
+              const SizedBox(width: 14),
+              Container(
+                width: 58,
+                height: 58,
+                decoration: const BoxDecoration(
+                  color: Colors.white,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  _statusIcon(report.status),
+                  color: _statusColor(report.status),
+                  size: 34,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              _readingChip(
+                Icons.favorite,
+                'النبض',
+                report.heartRate.toString(),
+              ),
+              _readingChip(
+                Icons.bloodtype,
+                'الضغط',
+                '${report.systolic}/${report.diastolic}',
+              ),
+              _readingChip(
+                Icons.water_drop,
+                'السكر',
+                report.glucose.toString(),
+              ),
+              _readingChip(Icons.air, 'الأكسجين', report.oxygen.toString()),
+              _readingChip(
+                Icons.thermostat,
+                'الحرارة',
+                report.temperature.toStringAsFixed(1),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          _dateTimeLine('التاريخ والوقت', report.date),
+        ],
+      ),
+    );
+  }
+
+  Widget _readingChip(IconData icon, String label, String value) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(15),
+        border: Border.all(color: border),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: dark, size: 22),
+          const SizedBox(width: 6),
+          Text(
+            '$label: $value',
+            style: const TextStyle(
+              fontSize: 17,
+              fontWeight: FontWeight.w800,
+              color: dark,
+              fontFamily: 'Cairo',
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _dateTimeLine(String title, DateTime date) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: border),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.calendar_month_rounded, color: dark, size: 22),
+          const SizedBox(width: 7),
+          Expanded(
+            child: Text(
+              '$title: ${_formatDate(date)}  •  ${_formatTime(date)}',
+              textAlign: TextAlign.right,
+              style: const TextStyle(
+                fontSize: 17,
+                fontWeight: FontWeight.w800,
+                color: dark,
+                fontFamily: 'Cairo',
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
   Widget _smallStatCard({
     required String title,
@@ -540,93 +496,49 @@ class HealthHistoryReportsScreen extends StatelessWidget {
     required Color iconColor,
   }) {
     return Container(
-      height: 150,
-
-      padding: const EdgeInsets.all(16),
-
+      constraints: const BoxConstraints(minHeight: 126),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: bgColor,
-
         borderRadius: BorderRadius.circular(24),
-
         border: Border.all(color: border),
       ),
-
-      child: Row(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Expanded(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-
-              crossAxisAlignment: CrossAxisAlignment.end,
-
-              children: [
-                Text(
-                  value,
-
-                  textAlign: TextAlign.right,
-
-                  style: const TextStyle(
-                    fontSize: 32,
-                    fontWeight: FontWeight.w900,
-
-                    color: dark,
-                  ),
-                ),
-
-                const SizedBox(height: 6),
-
-                Text(
-                  title,
-
-                  textAlign: TextAlign.right,
-
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w800,
-
-                    color: dark,
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          const SizedBox(width: 14),
-
           Container(
-            width: 56,
-            height: 56,
-
+            width: 48,
+            height: 48,
             decoration: BoxDecoration(
               color: Colors.white,
-
               shape: BoxShape.circle,
-
               border: Border.all(color: iconColor.withOpacity(0.15)),
             ),
-
-            child: Icon(icon, color: iconColor, size: 32),
+            child: Icon(icon, color: iconColor, size: 28),
+          ),
+          const SizedBox(height: 9),
+          Text(
+            value,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              fontSize: 28,
+              fontWeight: FontWeight.w900,
+              color: dark,
+              fontFamily: 'Cairo',
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            title,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w800,
+              color: dark,
+              fontFamily: 'Cairo',
+            ),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _infoText(String text) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 7),
-
-      child: Text(
-        text,
-
-        textAlign: TextAlign.right,
-
-        style: const TextStyle(
-          fontSize: 23,
-          fontWeight: FontWeight.w800,
-          color: dark,
-        ),
       ),
     );
   }
@@ -636,6 +548,7 @@ class HealthHistoryReportsScreen extends StatelessWidget {
     required int systolic,
     required int diastolic,
     required int glucose,
+    required int oxygen,
     required double temperature,
   }) {
     if (heartRate < 50 ||
@@ -644,6 +557,7 @@ class HealthHistoryReportsScreen extends StatelessWidget {
         diastolic >= 120 ||
         glucose < 70 ||
         glucose > 250 ||
+        (oxygen > 0 && oxygen < 90) ||
         temperature >= 39) {
       return 'خطر';
     }
@@ -653,6 +567,7 @@ class HealthHistoryReportsScreen extends StatelessWidget {
         systolic >= 140 ||
         diastolic >= 90 ||
         glucose > 180 ||
+        (oxygen > 0 && oxygen < 94) ||
         temperature >= 38) {
       return 'تحتاج متابعة';
     }
@@ -662,70 +577,59 @@ class HealthHistoryReportsScreen extends StatelessWidget {
 
   int _toInt(dynamic value) {
     if (value == null) return 0;
-
     if (value is int) return value;
-
-    if (value is double) {
-      return value.toInt();
-    }
-
-    if (value is String) {
-      return int.tryParse(value) ?? 0;
-    }
-
+    if (value is double) return value.toInt();
+    if (value is String) return int.tryParse(value) ?? 0;
     return 0;
   }
 
   double _toDouble(dynamic value) {
     if (value == null) return 0;
-
-    if (value is int) {
-      return value.toDouble();
-    }
-
+    if (value is int) return value.toDouble();
     if (value is double) return value;
-
-    if (value is String) {
-      return double.tryParse(value) ?? 0;
-    }
-
+    if (value is String)
+      return double.tryParse(value.replaceAll(',', '.')) ?? 0;
     return 0;
   }
 
+  String _arabicStatus(String value) {
+    final status = value.toLowerCase().trim();
+    if (status == 'critical' || status == 'خطر' || status == 'حرجة')
+      return 'خطر';
+    if (status == 'warning' || status == 'تحذير' || status == 'تحتاج متابعة')
+      return 'تحتاج متابعة';
+    return 'مستقرة';
+  }
+
   Color _statusBg(String status) {
-    if (status == 'خطر') {
-      return softRed;
-    }
-
-    if (status == 'تحتاج متابعة') {
-      return softOrange;
-    }
-
+    if (status == 'خطر') return softRed;
+    if (status == 'تحتاج متابعة') return softOrange;
     return softGreen;
   }
 
   Color _statusColor(String status) {
-    if (status == 'خطر') {
-      return Colors.red;
-    }
-
-    if (status == 'تحتاج متابعة') {
-      return Colors.orange;
-    }
-
+    if (status == 'خطر') return Colors.red;
+    if (status == 'تحتاج متابعة') return Colors.orange;
     return green;
   }
 
   IconData _statusIcon(String status) {
-    if (status == 'خطر') {
-      return Icons.warning_amber_rounded;
-    }
-
-    if (status == 'تحتاج متابعة') {
-      return Icons.info_outline_rounded;
-    }
-
+    if (status == 'خطر') return Icons.warning_amber_rounded;
+    if (status == 'تحتاج متابعة') return Icons.info_outline_rounded;
     return Icons.verified_user;
+  }
+
+  String _formatDate(DateTime date) {
+    return '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
+  }
+
+  String _formatTime(DateTime date) {
+    int hour = date.hour;
+    final minute = date.minute.toString().padLeft(2, '0');
+    final period = hour >= 12 ? 'مساءً' : 'صباحًا';
+    if (hour > 12) hour -= 12;
+    if (hour == 0) hour = 12;
+    return '${hour.toString().padLeft(2, '0')}:$minute $period';
   }
 }
 
@@ -734,11 +638,9 @@ class HealthReport {
   final int systolic;
   final int diastolic;
   final int glucose;
-
+  final int oxygen;
   final double temperature;
-
   final String status;
-
   final DateTime date;
 
   HealthReport({
@@ -746,6 +648,7 @@ class HealthReport {
     required this.systolic,
     required this.diastolic,
     required this.glucose,
+    required this.oxygen,
     required this.temperature,
     required this.status,
     required this.date,

@@ -2,8 +2,12 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:timezone/data/latest.dart' as tzdata;
+import 'package:timezone/timezone.dart' as tz;
 
 import 'notifications_screen.dart';
 
@@ -32,6 +36,10 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
 
   File? selectedImage;
   bool isLoading = false;
+
+  final FlutterLocalNotificationsPlugin localNotifications =
+      FlutterLocalNotificationsPlugin();
+  bool localNotificationsInitialized = false;
 
   final List<String> doses = const [
     'نصف حبة',
@@ -151,16 +159,588 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
   Future<String?> uploadMedicationImage() async {
     if (selectedImage == null) return null;
 
-    final String fileName = DateTime.now().millisecondsSinceEpoch.toString();
+    try {
+      final String fileName = DateTime.now().millisecondsSinceEpoch.toString();
 
-    final Reference ref = FirebaseStorage.instance
-        .ref()
-        .child('medication_images')
-        .child('$fileName.jpg');
+      final Reference ref = FirebaseStorage.instance
+          .ref()
+          .child('medication_images')
+          .child('$fileName.jpg');
 
-    await ref.putFile(selectedImage!);
+      await ref.putFile(selectedImage!);
 
-    return await ref.getDownloadURL();
+      return await ref.getDownloadURL();
+    } catch (e) {
+      debugPrint('Medication image upload error: $e');
+      return null;
+    }
+  }
+
+  Future<void> initLocalNotifications() async {
+    if (localNotificationsInitialized) return;
+
+    tzdata.initializeTimeZones();
+
+    const androidSettings = AndroidInitializationSettings(
+      '@mipmap/ic_launcher',
+    );
+    const initSettings = InitializationSettings(android: androidSettings);
+
+    await localNotifications.initialize(initSettings);
+
+    final androidPlugin = localNotifications
+        .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin
+        >();
+
+    await androidPlugin?.requestNotificationsPermission();
+    await androidPlugin?.requestExactAlarmsPermission();
+
+    localNotificationsInitialized = true;
+  }
+
+  int _notificationIdFor(String medicineName, int index) {
+    final base = medicineName.hashCode.abs() % 100000;
+    return base + index + DateTime.now().millisecondsSinceEpoch % 10000;
+  }
+
+  DateTime? _timeTextToDateTime(String timeText) {
+    final text = timeText.trim();
+    final match = RegExp(r'(\d{1,2}):(\d{2})').firstMatch(text);
+    if (match == null) return null;
+
+    int hour = int.tryParse(match.group(1) ?? '') ?? 8;
+    final int minute = int.tryParse(match.group(2) ?? '') ?? 0;
+
+    final bool isPm = text.contains('مساء') || text.contains('ظهر');
+    final bool isAm = text.contains('صباح');
+
+    if (isPm && hour < 12) hour += 12;
+    if (isAm && hour == 12) hour = 0;
+
+    final now = DateTime.now();
+    DateTime scheduled = DateTime(now.year, now.month, now.day, hour, minute);
+
+    if (scheduled.isBefore(now.add(const Duration(seconds: 20)))) {
+      scheduled = scheduled.add(const Duration(days: 1));
+    }
+
+    return scheduled;
+  }
+
+  Future<void> scheduleMedicationLocalNotifications({
+    required String medicationName,
+    required List<String> selectedTimes,
+  }) async {
+    if (selectedTimes.isEmpty) return;
+
+    try {
+      await initLocalNotifications();
+
+      const androidDetails = AndroidNotificationDetails(
+        'mycare_medication_channel',
+        'تذكيرات الأدوية',
+        channelDescription: 'تنبيهات مواعيد الأدوية اليومية',
+        importance: Importance.max,
+        priority: Priority.max,
+        playSound: true,
+        enableVibration: true,
+        ticker: 'موعد الدواء',
+        category: AndroidNotificationCategory.reminder,
+        visibility: NotificationVisibility.public,
+        fullScreenIntent: true,
+      );
+
+      const details = NotificationDetails(android: androidDetails);
+
+      for (int i = 0; i < selectedTimes.length; i++) {
+        final scheduledDate = _timeTextToDateTime(selectedTimes[i]);
+        if (scheduledDate == null) continue;
+
+        await localNotifications.zonedSchedule(
+          _notificationIdFor(medicationName, i),
+          'موعد الدواء',
+          'لديك حبة دواء الآن: $medicationName',
+          tz.TZDateTime.from(scheduledDate, tz.local),
+          details,
+          androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+          matchDateTimeComponents: DateTimeComponents.time,
+        );
+      }
+    } catch (e) {
+      debugPrint('Schedule medication notification error: $e');
+    }
+  }
+
+  String _normalizeText(String value) {
+    return value
+        .toLowerCase()
+        .replaceAll('أ', 'ا')
+        .replaceAll('إ', 'ا')
+        .replaceAll('آ', 'ا')
+        .replaceAll('ى', 'ي')
+        .replaceAll('ة', 'ه')
+        .replaceAll(RegExp(r'[^a-z0-9\u0600-\u06FF]+'), ' ')
+        .trim();
+  }
+
+  List<String> _splitMedicalText(dynamic value) {
+    if (value == null) return [];
+
+    if (value is List) {
+      return value.map((item) => item.toString()).toList();
+    }
+
+    return value
+        .toString()
+        .split(RegExp(r'[,،/\n]+'))
+        .map((item) => item.trim())
+        .where((item) => item.isNotEmpty)
+        .toList();
+  }
+
+  List<String> _getPatientAllergies(Map<String, dynamic> userData) {
+    final healthProfile = userData['healthProfile'];
+    final allergies = <String>[];
+
+    if (healthProfile is Map) {
+      allergies.addAll(_splitMedicalText(healthProfile['allergy']));
+      allergies.addAll(_splitMedicalText(healthProfile['allergies']));
+      allergies.addAll(_splitMedicalText(healthProfile['allergyTypes']));
+    }
+
+    allergies.addAll(_splitMedicalText(userData['allergy']));
+    allergies.addAll(_splitMedicalText(userData['allergies']));
+
+    return allergies
+        .map((item) => item.trim())
+        .where((item) => item.isNotEmpty && item != 'لا يوجد')
+        .toSet()
+        .toList();
+  }
+
+  Map<String, dynamic>? checkMedicationAllergy({
+    required String medicationName,
+    required List<String> allergies,
+  }) {
+    final med = _normalizeText(medicationName);
+    final cleanAllergies = allergies
+        .map((item) => item.trim())
+        .where((item) => item.isNotEmpty && item != 'لا يوجد')
+        .toList();
+
+    if (med.isEmpty || cleanAllergies.isEmpty) return null;
+
+    final allergyText = cleanAllergies.map(_normalizeText).join(' ');
+
+    bool hasAnyAllergy(List<String> keywords) {
+      return keywords.any(
+        (keyword) => allergyText.contains(_normalizeText(keyword)),
+      );
+    }
+
+    bool medContains(List<String> keywords) {
+      return keywords.any((keyword) => med.contains(_normalizeText(keyword)));
+    }
+
+    final rules = <Map<String, dynamic>>[
+      {
+        'allergyName': 'Penicillin / البنسلين',
+        'allergyKeywords': [
+          'penicillin',
+          'بنسلين',
+          'البنسلين',
+          'حساسية البنسلين',
+        ],
+        'medicationKeywords': [
+          'penicillin',
+          'amoxicillin',
+          'amoxil',
+          'augmentin',
+          'ampicillin',
+          'cloxacillin',
+          'flucloxacillin',
+          'phenoxymethylpenicillin',
+          'piperacillin',
+          'tazocin',
+          'اموكسيسيلين',
+          'اوجمنتين',
+          'امبيسيلين',
+          'بنسلين',
+        ],
+        'message': 'هذا الدواء قد لا يناسب المريض لأنه من عائلة البنسلين.',
+      },
+      {
+        'allergyName': 'Sulfa / السلفا',
+        'allergyKeywords': [
+          'sulfa',
+          'sulfonamide',
+          'sulphonamide',
+          'سلفا',
+          'السلفا',
+        ],
+        'medicationKeywords': [
+          'sulfa',
+          'sulfamethoxazole',
+          'sulphamethoxazole',
+          'bactrim',
+          'septrin',
+          'co trimoxazole',
+          'co-trimoxazole',
+          'cotrimoxazole',
+          'trimethoprim',
+          'sulfasalazine',
+          'باكتريم',
+          'سبترين',
+          'سلفاميثوكسازول',
+        ],
+        'message': 'هذا الدواء قد يتعارض مع حساسية السلفا.',
+      },
+      {
+        'allergyName': 'Aspirin / الأسبرين',
+        'allergyKeywords': ['aspirin', 'اسبرين', 'الاسبرين', 'أسبرين'],
+        'medicationKeywords': [
+          'aspirin',
+          'aspocid',
+          'aspocard',
+          'aspegic',
+          'اسبرين',
+          'أسبرين',
+          'اسبوكارد',
+          'اسبيجيك',
+        ],
+        'message':
+            'هذا الدواء قد يسبب مشكلة لأن المريض لديه حساسية من الأسبرين.',
+      },
+      {
+        'allergyName': 'Ibuprofen / الإيبوبروفين',
+        'allergyKeywords': [
+          'ibuprofen',
+          'ايبوبروفين',
+          'إيبوبروفين',
+          'بروفين',
+          'brufen',
+        ],
+        'medicationKeywords': [
+          'ibuprofen',
+          'brufen',
+          'advil',
+          'nurofen',
+          'prof',
+          'ايبوبروفين',
+          'إيبوبروفين',
+          'بروفين',
+          'ادفيل',
+        ],
+        'message': 'هذا الدواء قد يتعارض مع حساسية الإيبوبروفين أو البروفين.',
+      },
+      {
+        'allergyName': 'حساسية تخدير',
+        'allergyKeywords': [
+          'حساسية تخدير',
+          'حساسية التخدير',
+          'تخدير',
+          'anesthesia',
+          'anaesthesia',
+        ],
+        'medicationKeywords': [
+          'lidocaine',
+          'xylocaine',
+          'bupivacaine',
+          'marcaine',
+          'propofol',
+          'ketamine',
+          'thiopental',
+          'midazolam',
+          'fentanyl',
+          'ليدوكايين',
+          'زيلوكايين',
+          'بوبيفاكايين',
+          'بروبو فول',
+          'بروبوفول',
+          'كيتامين',
+        ],
+        'message':
+            'هذا الدواء قد يكون مرتبطاً بأدوية التخدير، يجب الانتباه لحساسية المريض.',
+      },
+      {
+        'allergyName': 'حساسية أدوية الصرع',
+        'allergyKeywords': [
+          'حساسية أدوية الصرع',
+          'حساسية ادويه الصرع',
+          'ادوية الصرع',
+          'أدوية الصرع',
+          'صرع',
+          'antiepileptic',
+          'anti epileptic',
+        ],
+        'medicationKeywords': [
+          'carbamazepine',
+          'tegretol',
+          'valproate',
+          'valproic acid',
+          'depakine',
+          'depakote',
+          'levetiracetam',
+          'keppra',
+          'lamotrigine',
+          'lamictal',
+          'phenytoin',
+          'epanutin',
+          'phenobarbital',
+          'topiramate',
+          'topamax',
+          'كاربامازيبين',
+          'تيجريتول',
+          'فالبروات',
+          'ديباكين',
+          'كيبرا',
+          'لاموتريجين',
+          'فيني توين',
+          'فينيتوين',
+          'توبيراميت',
+        ],
+        'message': 'هذا الدواء من أدوية الصرع وقد لا يناسب حساسية المريض.',
+      },
+      {
+        'allergyName': 'حساسية أدوية الأعصاب',
+        'allergyKeywords': [
+          'حساسية أدوية الأعصاب',
+          'حساسية ادويه الاعصاب',
+          'ادوية الاعصاب',
+          'أدوية الأعصاب',
+          'اعصاب',
+          'أعصاب',
+        ],
+        'medicationKeywords': [
+          'gabapentin',
+          'neurontin',
+          'pregabalin',
+          'lyrica',
+          'duloxetine',
+          'cymbalta',
+          'amitriptyline',
+          'nortriptyline',
+          'جابتين',
+          'جابابنتين',
+          'نيورونتين',
+          'بريجابالين',
+          'ليريكا',
+          'دولوكستين',
+          'اميتريبتيلين',
+        ],
+        'message': 'هذا الدواء من أدوية الأعصاب وقد لا يناسب حساسية المريض.',
+      },
+      {
+        'allergyName': 'حساسية طعام',
+        'allergyKeywords': [
+          'حساسية طعام',
+          'حساسيه طعام',
+          'food allergy',
+          'طعام',
+        ],
+        'medicationKeywords': [
+          'gelatin',
+          'lactose',
+          'egg',
+          'soy',
+          'peanut',
+          'nuts',
+          'fish oil',
+          'زيت السمك',
+          'جيلاتين',
+          'لاكتوز',
+          'بيض',
+          'صويا',
+          'فول سوداني',
+          'مكسرات',
+        ],
+        'message':
+            'المريض لديه حساسية طعام، وقد يحتوي هذا الدواء على مواد مساعدة تحتاج مراجعة الطبيب أو الصيدلي.',
+      },
+    ];
+
+    for (final rule in rules) {
+      final allergyKeywords = List<String>.from(
+        rule['allergyKeywords'] as List,
+      );
+      final medicationKeywords = List<String>.from(
+        rule['medicationKeywords'] as List,
+      );
+
+      if (hasAnyAllergy(allergyKeywords) && medContains(medicationKeywords)) {
+        return rule;
+      }
+    }
+
+    return null;
+  }
+
+  Future<bool> showAllergyWarningDialog(Map<String, dynamic> warning) async {
+    final result = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        return Directionality(
+          textDirection: TextDirection.rtl,
+          child: AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(24),
+            ),
+            title: const Text(
+              'تحذير حساسية دواء',
+              textAlign: TextAlign.right,
+              style: TextStyle(
+                fontFamily: 'Cairo',
+                fontWeight: FontWeight.bold,
+                color: Color(0xFFD32F2F),
+              ),
+            ),
+            content: Text(
+              '${warning['message']}\n\nنوع الحساسية: ${warning['allergyName']}\n\nيفضل مراجعة الطبيب قبل استخدام الدواء.',
+              textAlign: TextAlign.right,
+              style: const TextStyle(
+                fontSize: 18,
+                fontFamily: 'Cairo',
+                height: 1.6,
+                color: Colors.black,
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text(
+                  'إلغاء الحفظ',
+                  style: TextStyle(
+                    fontFamily: 'Cairo',
+                    color: Color(0xFFD32F2F),
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Color(0xFF1E3A5F),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                ),
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text(
+                  'حفظ رغم التحذير',
+                  style: TextStyle(
+                    fontFamily: 'Cairo',
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+
+    return result == true;
+  }
+
+  String _digitsOnly(String value) {
+    return value.replaceAll(RegExp(r'[^0-9]'), '');
+  }
+
+  Set<String> _phoneVariants(String phone) {
+    final cleaned = _digitsOnly(phone);
+    final variants = <String>{};
+
+    if (cleaned.isEmpty) return variants;
+
+    variants.add(cleaned);
+
+    if (cleaned.startsWith('970') && cleaned.length >= 12) {
+      variants.add('0${cleaned.substring(3)}');
+    }
+
+    if (cleaned.startsWith('972') && cleaned.length >= 12) {
+      variants.add('0${cleaned.substring(3)}');
+    }
+
+    if (cleaned.startsWith('0') && cleaned.length == 10) {
+      variants.add('970${cleaned.substring(1)}');
+      variants.add('972${cleaned.substring(1)}');
+    }
+
+    return variants.where((item) => item.trim().isNotEmpty).toSet();
+  }
+
+  Future<String> findUserIdByPhone(String phone, String role) async {
+    final variants = _phoneVariants(phone);
+    if (variants.isEmpty) return '';
+
+    final allowedRoles = role == 'مرافق' ? ['مرافق', 'معتني'] : [role];
+
+    for (final variant in variants) {
+      final byPhone = await FirebaseFirestore.instance
+          .collection('users')
+          .where('phone', isEqualTo: variant)
+          .limit(5)
+          .get();
+
+      for (final doc in byPhone.docs) {
+        final data = doc.data();
+        final userRole = (data['role'] ?? '').toString().trim();
+
+        if (allowedRoles.contains(userRole)) {
+          return doc.id;
+        }
+      }
+
+      final byOriginalPhone = await FirebaseFirestore.instance
+          .collection('users')
+          .where('originalPhone', isEqualTo: variant)
+          .limit(5)
+          .get();
+
+      for (final doc in byOriginalPhone.docs) {
+        final data = doc.data();
+        final userRole = (data['role'] ?? '').toString().trim();
+
+        if (allowedRoles.contains(userRole)) {
+          return doc.id;
+        }
+      }
+    }
+
+    return '';
+  }
+
+  Future<void> addNotification({
+    required String title,
+    required String message,
+    required String type,
+    required String patientId,
+    required String patientName,
+    required String patientPhone,
+    String caregiverId = '',
+    String doctorId = '',
+    String recipientId = '',
+    Map<String, dynamic>? extra,
+  }) async {
+    await FirebaseFirestore.instance.collection('notifications').add({
+      'title': title,
+      'message': message,
+      'type': type,
+      'time': type == 'allergy_warning' ? 'تحذير حساسية' : 'تنبيه',
+      'isRead': false,
+      'userId': patientId,
+      'patientId': patientId,
+      'patientName': patientName,
+      'patientPhone': patientPhone,
+      'caregiverId': caregiverId,
+      'doctorId': doctorId,
+      'recipientId': recipientId,
+      if (extra != null) ...extra,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
   }
 
   Future<void> saveMedication() async {
@@ -173,13 +753,58 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
       return;
     }
 
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null) {
+      showMessage('يجب تسجيل الدخول أولاً', false);
+      return;
+    }
+
     try {
       setState(() => isLoading = true);
+
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(currentUser.uid)
+          .get();
+
+      final userData = userDoc.data() ?? {};
+      final patientName = (userData['fullName'] ?? userData['name'] ?? 'المريض')
+          .toString();
+      final patientPhone = (userData['phone'] ?? '').toString();
+      final caregiverPhone =
+          (userData['emergencyContact'] ?? userData['linkedPhone'] ?? '')
+              .toString();
+      final doctorPhone = (userData['doctorPhone'] ?? '').toString();
+
+      final caregiverId = await findUserIdByPhone(caregiverPhone, 'مرافق');
+      final doctorId = await findUserIdByPhone(doctorPhone, 'طبيب');
+
+      final allergies = _getPatientAllergies(userData);
+      final allergyWarning = checkMedicationAllergy(
+        medicationName: name,
+        allergies: allergies,
+      );
+
+      if (allergyWarning != null) {
+        if (!mounted) return;
+        final continueSaving = await showAllergyWarningDialog(allergyWarning);
+
+        if (!continueSaving) {
+          if (mounted) setState(() => isLoading = false);
+          return;
+        }
+      }
 
       final String? imageUrl = await uploadMedicationImage();
       final List<String> selectedTimes = getSelectedTimes();
 
-      await FirebaseFirestore.instance.collection('medications').add({
+      final medicationData = {
+        'userId': currentUser.uid,
+        'patientId': currentUser.uid,
+        'patientName': patientName,
+        'patientPhone': patientPhone,
+        'caregiverId': caregiverId,
+        'doctorId': doctorId,
         'name': name,
         'dose': selectedDose,
         'frequency': selectedFrequency,
@@ -199,29 +824,131 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
         'time3': selectedFrequency == 'ثلاث مرات يوميًا' ? selectedTime3 : null,
         'isActive': true,
         'isTaken': false,
+        'allergyWarning': allergyWarning != null,
+        'allergyWarningMessage': allergyWarning?['message'],
+        'allergyWarningName': allergyWarning?['allergyName'],
         'createdAt': FieldValue.serverTimestamp(),
-      });
+      };
 
-      await FirebaseFirestore.instance.collection('notifications').add({
-        'title': 'موعد الدواء',
-        'message': selectedTimes.isEmpty
-            ? 'تمت إضافة دواء $name ويستخدم عند الحاجة'
-            : 'تمت إضافة دواء $name، موعده: ${selectedTimes.join('، ')}',
-        'time': selectedTimes.isEmpty ? 'عند الحاجة' : selectedTimes.first,
-        'type': 'medication',
-        'isRead': false,
-        'createdAt': FieldValue.serverTimestamp(),
-      });
+      await FirebaseFirestore.instance
+          .collection('medications')
+          .add(medicationData);
+
+      await scheduleMedicationLocalNotifications(
+        medicationName: name,
+        selectedTimes: selectedTimes,
+      );
+
+      try {
+        await addNotification(
+          title: 'موعد الدواء',
+          message: selectedTimes.isEmpty
+              ? 'تمت إضافة دواء $name ويستخدم عند الحاجة'
+              : 'تمت إضافة دواء $name، موعده: ${selectedTimes.join('، ')}',
+          type: 'medication',
+          patientId: currentUser.uid,
+          patientName: patientName,
+          patientPhone: patientPhone,
+          caregiverId: caregiverId,
+          doctorId: doctorId,
+          recipientId: currentUser.uid,
+          extra: {
+            'time': selectedTimes.isEmpty ? 'عند الحاجة' : selectedTimes.first,
+            'medicationName': name,
+          },
+        );
+
+        if (caregiverId.isNotEmpty) {
+          await addNotification(
+            title: 'دواء جديد للمريض',
+            message: 'تمت إضافة دواء $name للمريض $patientName',
+            type: 'medication',
+            patientId: currentUser.uid,
+            patientName: patientName,
+            patientPhone: patientPhone,
+            caregiverId: caregiverId,
+            doctorId: doctorId,
+            recipientId: caregiverId,
+            extra: {'medicationName': name},
+          );
+        }
+
+        if (allergyWarning != null) {
+          final warningMessage =
+              '${allergyWarning['message']} المريض لديه حساسية: ${allergyWarning['allergyName']}.';
+
+          await addNotification(
+            title: 'تحذير حساسية دواء',
+            message: warningMessage,
+            type: 'allergy_warning',
+            patientId: currentUser.uid,
+            patientName: patientName,
+            patientPhone: patientPhone,
+            caregiverId: caregiverId,
+            doctorId: doctorId,
+            recipientId: currentUser.uid,
+            extra: {
+              'medicationName': name,
+              'allergyName': allergyWarning['allergyName'],
+              'allergyMessage': allergyWarning['message'],
+            },
+          );
+
+          if (caregiverId.isNotEmpty) {
+            await addNotification(
+              title: 'تحذير حساسية دواء',
+              message: 'تنبيه للمريض $patientName: $warningMessage',
+              type: 'allergy_warning',
+              patientId: currentUser.uid,
+              patientName: patientName,
+              patientPhone: patientPhone,
+              caregiverId: caregiverId,
+              doctorId: doctorId,
+              recipientId: caregiverId,
+              extra: {
+                'medicationName': name,
+                'allergyName': allergyWarning['allergyName'],
+                'allergyMessage': allergyWarning['message'],
+              },
+            );
+          }
+
+          if (doctorId.isNotEmpty) {
+            await addNotification(
+              title: 'تحذير حساسية دواء',
+              message:
+                  'المريض $patientName أضاف دواء قد يتعارض مع الحساسية: $name',
+              type: 'allergy_warning',
+              patientId: currentUser.uid,
+              patientName: patientName,
+              patientPhone: patientPhone,
+              caregiverId: caregiverId,
+              doctorId: doctorId,
+              recipientId: doctorId,
+              extra: {
+                'medicationName': name,
+                'allergyName': allergyWarning['allergyName'],
+                'allergyMessage': allergyWarning['message'],
+              },
+            );
+          }
+        }
+      } catch (e) {
+        debugPrint('Medication notification document error: $e');
+      }
 
       if (!mounted) return;
 
-      showMessage('تم حفظ الدواء وإضافة التنبيه بنجاح 💙', true);
-
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => const NotificationsScreen()),
+      showMessage(
+        allergyWarning == null
+            ? 'تم حفظ الدواء وإضافة التنبيه بنجاح 💙'
+            : 'تم حفظ الدواء مع وجود تحذير حساسية ⚠️',
+        allergyWarning == null,
       );
+
+      Navigator.pop(context);
     } catch (e) {
+      debugPrint('Save medication error: $e');
       if (!mounted) return;
       showMessage('حدث خطأ أثناء الحفظ، تأكد من الإنترنت و Firebase', false);
     } finally {

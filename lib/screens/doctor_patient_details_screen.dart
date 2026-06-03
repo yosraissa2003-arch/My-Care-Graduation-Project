@@ -47,47 +47,134 @@ class _DoctorPatientDetailsScreenState
         .doc(widget.patientId)
         .get();
 
+    final healthLogsSnapshot = await FirebaseFirestore.instance
+        .collection('healthLogs')
+        .where('userId', isEqualTo: widget.patientId)
+        .get();
+
     final notesSnapshot = await FirebaseFirestore.instance
         .collection('doctor_notes')
         .where('patientId', isEqualTo: widget.patientId)
         .get();
 
+    final healthLogs = healthLogsSnapshot.docs.toList();
+    healthLogs.sort((a, b) {
+      final aTime = a.data()['createdAt'];
+      final bTime = b.data()['createdAt'];
+
+      if (aTime is Timestamp && bTime is Timestamp) {
+        return bTime.compareTo(aTime);
+      }
+
+      return 0;
+    });
+
+    final notes = notesSnapshot.docs.toList();
+    notes.sort((a, b) {
+      final aTime = a.data()['createdAt'];
+      final bTime = b.data()['createdAt'];
+
+      if (aTime is Timestamp && bTime is Timestamp) {
+        return bTime.compareTo(aTime);
+      }
+
+      return 0;
+    });
+
     return {
       'user': userDoc.data() ?? {},
       'medical': medicalDoc.data() ?? {},
-      'notes': notesSnapshot.docs.map((e) => e.data()).toList(),
+      'lastHealthLog': healthLogs.isNotEmpty ? healthLogs.first.data() : {},
+      'notes': notes.map((e) => e.data()).toList(),
     };
   }
 
-  String getRiskStatus(Map<String, dynamic> medical) {
-    final readings = medical['lastReadings'] ?? {};
+  int _toInt(dynamic value) {
+    if (value == null) return 0;
+    if (value is int) return value;
+    if (value is double) return value.toInt();
+    if (value is String) return int.tryParse(value) ?? 0;
+    return 0;
+  }
 
-    final heartRate =
-        double.tryParse((readings['heartRate'] ?? '').toString()) ?? 0;
+  String getValue(dynamic value) {
+    if (value == null) return '';
+    final text = value.toString().trim();
+    if (text.isEmpty || text == 'null') return '';
+    return text;
+  }
 
-    final sugar = double.tryParse((readings['sugar'] ?? '').toString()) ?? 0;
+  String getBloodPressure(Map<String, dynamic> readings) {
+    final direct = getValue(readings['bloodPressure']);
+    if (direct.isNotEmpty) return direct;
 
-    final bloodPressure = (readings['bloodPressure'] ?? '').toString();
-    double systolic = 0;
+    final systolic = getValue(readings['bloodPressureSystolic']);
+    final diastolic = getValue(readings['bloodPressureDiastolic']);
 
-    if (bloodPressure.contains('/')) {
-      systolic = double.tryParse(bloodPressure.split('/').first) ?? 0;
+    if (systolic.isNotEmpty && diastolic.isNotEmpty) {
+      return '$systolic/$diastolic';
     }
 
-    if (heartRate > 120 || sugar > 250 || systolic > 180) {
+    return '';
+  }
+
+  String getRiskStatus(Map<String, dynamic> readings) {
+    final heartRate = _toInt(readings['heartRate']);
+    final sugar = _toInt(readings['sugar'] ?? readings['glucose']);
+    final oxygen = _toInt(readings['oxygen']);
+    final temperature = double.tryParse(getValue(readings['temperature'])) ?? 0;
+    final systolic = _toInt(readings['bloodPressureSystolic']);
+    final diastolic = _toInt(readings['bloodPressureDiastolic']);
+
+    int parsedSystolic = systolic;
+    int parsedDiastolic = diastolic;
+    final bloodPressure = getValue(readings['bloodPressure']);
+
+    if (bloodPressure.contains('/')) {
+      final parts = bloodPressure.split('/');
+      parsedSystolic = int.tryParse(parts.first.trim()) ?? parsedSystolic;
+      if (parts.length > 1) {
+        parsedDiastolic = int.tryParse(parts[1].trim()) ?? parsedDiastolic;
+      }
+    }
+
+    if (heartRate > 120 ||
+        heartRate < 50 ||
+        sugar > 250 ||
+        sugar < 70 ||
+        oxygen < 90 ||
+        temperature >= 39 ||
+        parsedSystolic >= 180 ||
+        parsedDiastolic >= 120) {
       return 'Critical';
     }
 
-    if (heartRate > 100 || sugar > 180 || systolic > 140) {
+    if (heartRate > 100 ||
+        heartRate < 60 ||
+        sugar > 180 ||
+        oxygen < 95 ||
+        temperature >= 38 ||
+        parsedSystolic >= 140 ||
+        parsedDiastolic >= 90) {
       return 'Warning';
     }
 
+    if (readings.isEmpty) return 'No Readings';
+
     return 'Normal';
+  }
+
+  String getArabicStatus(String status) {
+    if (status == 'Critical') return 'خطر';
+    if (status == 'Warning') return 'تحتاج متابعة';
+    if (status == 'No Readings') return 'لا توجد قراءات';
+    return 'طبيعي';
   }
 
   Color getStatusColor(String status) {
     if (status == 'Critical') return errorColor;
     if (status == 'Warning') return warningColor;
+    if (status == 'No Readings') return secondaryTextColor;
     return successColor;
   }
 
@@ -126,12 +213,12 @@ class _DoctorPatientDetailsScreenState
         children: [
           Row(
             children: [
-              Icon(icon, color: primaryColor),
+              Icon(icon, color: primaryColor, size: 28),
               const SizedBox(width: 8),
               Text(
                 title,
                 style: const TextStyle(
-                  fontSize: 20,
+                  fontSize: 22,
                   fontFamily: 'Cairo',
                   fontWeight: FontWeight.bold,
                   color: textColor,
@@ -148,14 +235,14 @@ class _DoctorPatientDetailsScreenState
 
   Widget buildRow(String label, String value) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.only(bottom: 12),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             '$label: ',
             style: const TextStyle(
-              fontSize: 16,
+              fontSize: 18,
               fontFamily: 'Cairo',
               fontWeight: FontWeight.bold,
               color: textColor,
@@ -164,11 +251,49 @@ class _DoctorPatientDetailsScreenState
           Expanded(
             child: Text(
               value.isEmpty ? '-' : value,
+              textAlign: TextAlign.right,
               style: const TextStyle(
-                fontSize: 16,
+                fontSize: 18,
                 fontFamily: 'Cairo',
                 color: secondaryTextColor,
+                fontWeight: FontWeight.w600,
               ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget buildStatusCard(String status) {
+    final statusColor = getStatusColor(status);
+
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: statusColor.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: statusColor.withOpacity(0.35)),
+      ),
+      child: Column(
+        children: [
+          Text(
+            'AI Health Status',
+            style: TextStyle(
+              fontSize: 18,
+              fontFamily: 'Cairo',
+              color: statusColor,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            getArabicStatus(status),
+            style: TextStyle(
+              fontSize: 30,
+              fontFamily: 'Cairo',
+              color: statusColor,
+              fontWeight: FontWeight.bold,
             ),
           ),
         ],
@@ -200,50 +325,32 @@ class _DoctorPatientDetailsScreenState
               return const Center(child: CircularProgressIndicator());
             }
 
+            if (snapshot.hasError) {
+              return const Center(
+                child: Text(
+                  'حدث خطأ أثناء تحميل بيانات المريض',
+                  style: TextStyle(fontFamily: 'Cairo', fontSize: 18),
+                ),
+              );
+            }
+
             final data = snapshot.data ?? {};
-            final user = data['user'] ?? {};
-            final medical = data['medical'] ?? {};
+            final user = (data['user'] ?? {}) as Map<String, dynamic>;
+            final medical = (data['medical'] ?? {}) as Map<String, dynamic>;
+            final healthProfile =
+                (user['healthProfile'] ?? {}) as Map<dynamic, dynamic>;
+            final lastHealthLog =
+                (data['lastHealthLog'] ?? {}) as Map<String, dynamic>;
             final notes = (data['notes'] ?? []) as List;
 
-            final readings = medical['lastReadings'] ?? {};
-            final status = getRiskStatus(medical);
-            final statusColor = getStatusColor(status);
+            final status = getRiskStatus(lastHealthLog);
 
             return SingleChildScrollView(
               padding: const EdgeInsets.all(20),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Container(
-                    padding: const EdgeInsets.all(18),
-                    decoration: BoxDecoration(
-                      color: statusColor.withOpacity(0.12),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Column(
-                      children: [
-                        Text(
-                          'AI Health Status',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontFamily: 'Cairo',
-                            color: statusColor,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          status,
-                          style: TextStyle(
-                            fontSize: 28,
-                            fontFamily: 'Cairo',
-                            color: statusColor,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
+                  buildStatusCard(status),
 
                   const SizedBox(height: 16),
 
@@ -251,14 +358,22 @@ class _DoctorPatientDetailsScreenState
                     title: 'البيانات الأساسية',
                     icon: Icons.person,
                     children: [
-                      buildRow('الاسم', user['fullName'] ?? ''),
-                      buildRow('العمر', user['age'] ?? medical['age'] ?? ''),
+                      buildRow('الاسم', getValue(user['fullName'])),
+                      buildRow(
+                        'العمر',
+                        getValue(user['age'] ?? medical['age']),
+                      ),
                       buildRow(
                         'الجنس',
-                        user['gender'] ?? medical['gender'] ?? '',
+                        getValue(user['gender'] ?? medical['gender']),
                       ),
-                      buildRow('فصيلة الدم', medical['bloodType'] ?? ''),
-                      buildRow('رقم الهاتف', user['phone'] ?? ''),
+                      buildRow(
+                        'فصيلة الدم',
+                        getValue(
+                          healthProfile['bloodType'] ?? medical['bloodType'],
+                        ),
+                      ),
+                      buildRow('رقم الهاتف', getValue(user['phone'])),
                     ],
                   ),
 
@@ -268,20 +383,57 @@ class _DoctorPatientDetailsScreenState
                     children: [
                       buildRow(
                         'الأمراض المزمنة',
-                        medical['pastMedicalHistory'] ?? '',
+                        getValue(
+                          healthProfile['diseases'] ??
+                              medical['pastMedicalHistory'] ??
+                              medical['diseases'],
+                        ),
                       ),
-                      buildRow('منذ متى', medical['diseaseSince'] ?? ''),
+                      buildRow(
+                        'منذ متى',
+                        getValue(
+                          healthProfile['diseaseSince'] ??
+                              medical['diseaseSince'],
+                        ),
+                      ),
                       buildRow(
                         'الأدوية المزمنة',
-                        medical['chronicMedicines'] ?? '',
+                        getValue(
+                          healthProfile['medicines'] ??
+                              medical['chronicMedicines'] ??
+                              medical['medicines'],
+                        ),
                       ),
-                      buildRow('الحساسية', medical['allergies'] ?? ''),
-                      buildRow('نوع الحساسية', medical['allergyTypes'] ?? ''),
+                      buildRow(
+                        'الحساسية',
+                        getValue(
+                          healthProfile['allergy'] ??
+                              medical['allergies'] ??
+                              medical['allergy'],
+                        ),
+                      ),
+                      buildRow(
+                        'نوع الحساسية',
+                        getValue(
+                          healthProfile['allergyTypes'] ??
+                              medical['allergyTypes'],
+                        ),
+                      ),
                       buildRow(
                         'العمليات السابقة',
-                        medical['pastSurgicalHistory'] ?? '',
+                        getValue(
+                          healthProfile['surgeries'] ??
+                              medical['pastSurgicalHistory'] ??
+                              medical['surgeries'],
+                        ),
                       ),
-                      buildRow('التدخين', medical['smokingStatus'] ?? ''),
+                      buildRow(
+                        'التدخين',
+                        getValue(
+                          healthProfile['smokingStatus'] ??
+                              medical['smokingStatus'],
+                        ),
+                      ),
                     ],
                   ),
 
@@ -289,14 +441,21 @@ class _DoctorPatientDetailsScreenState
                     title: 'آخر القراءات',
                     icon: Icons.monitor_heart,
                     children: [
+                      buildRow('ضغط الدم', getBloodPressure(lastHealthLog)),
                       buildRow(
-                        'ضغط الدم',
-                        readings['bloodPressure']?.toString() ?? '',
+                        'السكر',
+                        getValue(
+                          lastHealthLog['sugar'] ?? lastHealthLog['glucose'],
+                        ),
                       ),
-                      buildRow('السكر', readings['sugar']?.toString() ?? ''),
                       buildRow(
                         'نبض القلب',
-                        readings['heartRate']?.toString() ?? '',
+                        getValue(lastHealthLog['heartRate']),
+                      ),
+                      buildRow('الأكسجين', getValue(lastHealthLog['oxygen'])),
+                      buildRow(
+                        'الحرارة',
+                        getValue(lastHealthLog['temperature']),
                       ),
                     ],
                   ),
@@ -308,6 +467,7 @@ class _DoctorPatientDetailsScreenState
                       TextField(
                         controller: noteController,
                         maxLines: 3,
+                        textAlign: TextAlign.right,
                         decoration: InputDecoration(
                           hintText: 'اكتب ملاحظة طبية...',
                           filled: true,
@@ -372,6 +532,7 @@ class _DoctorPatientDetailsScreenState
                               ),
                               child: Text(
                                 note['note'] ?? '',
+                                textAlign: TextAlign.right,
                                 style: const TextStyle(
                                   fontSize: 16,
                                   fontFamily: 'Cairo',

@@ -39,6 +39,12 @@ void main() async {
     sound: true,
   );
 
+  await FirebaseMessaging.instance.setForegroundNotificationPresentationOptions(
+    alert: true,
+    badge: true,
+    sound: true,
+  );
+
   FirebaseAuth.instance.authStateChanges().listen((user) async {
     if (user != null) {
       await saveFcmTokenForCurrentUser();

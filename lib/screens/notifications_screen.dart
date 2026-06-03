@@ -10,42 +10,10 @@ class NotificationsScreen extends StatefulWidget {
 }
 
 class _NotificationsScreenState extends State<NotificationsScreen> {
-  IconData getIcon(String type) {
-    switch (type) {
-      case 'medication':
-        return Icons.medication_outlined;
-      case 'warning':
-        return Icons.warning_amber_rounded;
-      case 'sos':
-        return Icons.sos;
-      default:
-        return Icons.notifications_rounded;
-    }
-  }
-
-  Color getColor(String type) {
-    switch (type) {
-      case 'medication':
-        return const Color(0xFF1E3A5F);
-      case 'warning':
-        return const Color(0xFFED6C02);
-      case 'sos':
-        return const Color(0xFFD32F2F);
-      default:
-        return const Color(0xFF1E3A5F);
-    }
-  }
-
-  String formatTime(dynamic timestamp) {
-    if (timestamp == null || timestamp is! Timestamp) return '';
-    final DateTime date = timestamp.toDate();
-    int hour = date.hour;
-    final int minute = date.minute;
-    final String period = hour >= 12 ? 'مساءً' : 'صباحًا';
-    if (hour > 12) hour -= 12;
-    if (hour == 0) hour = 12;
-    return '${hour.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')} $period';
-  }
+  static const Color primaryColor = Color(0xFF1E3A5F);
+  static const Color warningColor = Color(0xFFED6C02);
+  static const Color dangerColor = Color(0xFFD32F2F);
+  static const Color backgroundColor = Color(0xFFF7F8FA);
 
   Future<List<QueryDocumentSnapshot<Map<String, dynamic>>>>
   loadMyNotifications() async {
@@ -65,6 +33,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       }
     }
 
+    // للمريض الحالي فقط: تنبيهات تخص حسابه أو هو المستلم لها.
     await addQuery(
       FirebaseFirestore.instance
           .collection('notifications')
@@ -78,11 +47,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     await addQuery(
       FirebaseFirestore.instance
           .collection('notifications')
-          .where('caregiverId', isEqualTo: uid),
-    );
-    await addQuery(
-      FirebaseFirestore.instance
-          .collection('notifications')
           .where('recipientId', isEqualTo: uid),
     );
 
@@ -90,18 +54,79 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     docs.sort((a, b) {
       final aTime = a.data()['createdAt'];
       final bTime = b.data()['createdAt'];
-      if (aTime is Timestamp && bTime is Timestamp) {
+      if (aTime is Timestamp && bTime is Timestamp)
         return bTime.compareTo(aTime);
-      }
       return 0;
     });
     return docs;
   }
 
+  IconData getIcon(String type) {
+    switch (type) {
+      case 'medication':
+        return Icons.medication_outlined;
+      case 'warning':
+        return Icons.warning_amber_rounded;
+      case 'allergy_warning':
+        return Icons.health_and_safety_rounded;
+      case 'sos':
+        return Icons.sos;
+      default:
+        return Icons.notifications_rounded;
+    }
+  }
+
+  Color getColor(String type) {
+    switch (type) {
+      case 'medication':
+        return primaryColor;
+      case 'warning':
+        return warningColor;
+      case 'allergy_warning':
+        return dangerColor;
+      case 'sos':
+        return dangerColor;
+      default:
+        return primaryColor;
+    }
+  }
+
+  String getTypeLabel(String type) {
+    switch (type) {
+      case 'medication':
+        return 'تنبيه دواء';
+      case 'warning':
+        return 'تنبيه صحي / AI';
+      case 'allergy_warning':
+        return 'تحذير حساسية دواء';
+      case 'sos':
+        return 'تنبيه طوارئ';
+      default:
+        return 'تنبيه عام';
+    }
+  }
+
+  String formatDate(dynamic timestamp) {
+    if (timestamp == null || timestamp is! Timestamp) return '';
+    final date = timestamp.toDate();
+    return '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
+  }
+
+  String formatTime(dynamic timestamp) {
+    if (timestamp == null || timestamp is! Timestamp) return '';
+    final DateTime date = timestamp.toDate();
+    int hour = date.hour;
+    final int minute = date.minute;
+    final String period = hour >= 12 ? 'مساءً' : 'صباحًا';
+    if (hour > 12) hour -= 12;
+    if (hour == 0) hour = 12;
+    return '${hour.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')} $period';
+  }
+
   void openRelatedScreen(BuildContext context, String type) {
     if (type == 'medication') {
       Navigator.pushNamed(context, '/medication-list');
-    } else if (type == 'warning') {
+    } else if (type == 'warning' || type == 'allergy_warning') {
       Navigator.pushNamed(context, '/health-monitoring');
     } else if (type == 'sos') {
       Navigator.pushNamed(context, '/sos');
@@ -113,9 +138,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
-        backgroundColor: const Color(0xFFF7F8FA),
+        backgroundColor: backgroundColor,
         appBar: AppBar(
-          backgroundColor: const Color(0xFFF7F8FA),
+          backgroundColor: backgroundColor,
           elevation: 0,
           centerTitle: true,
           title: const Text(
@@ -124,6 +149,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               fontSize: 28,
               fontWeight: FontWeight.w900,
               color: Colors.black,
+              fontFamily: 'Cairo',
             ),
           ),
         ),
@@ -132,7 +158,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
               return const Center(
-                child: CircularProgressIndicator(color: Color(0xFF1E3A5F)),
+                child: CircularProgressIndicator(color: primaryColor),
               );
             }
 
@@ -144,6 +170,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                     fontSize: 20,
                     fontWeight: FontWeight.w900,
                     color: Colors.black,
+                    fontFamily: 'Cairo',
                   ),
                 ),
               );
@@ -159,6 +186,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                     fontSize: 22,
                     fontWeight: FontWeight.w900,
                     color: Colors.black,
+                    fontFamily: 'Cairo',
                   ),
                 ),
               );
@@ -173,6 +201,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                 itemBuilder: (context, index) {
                   final data = notifications[index].data();
                   final String type = (data['type'] ?? 'general').toString();
+                  final createdAt = data['createdAt'];
 
                   return InkWell(
                     borderRadius: BorderRadius.circular(22),
@@ -180,9 +209,16 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                     child: NotificationCard(
                       title: (data['title'] ?? 'تنبيه').toString(),
                       message: (data['message'] ?? '').toString(),
-                      time: (data['time'] ?? formatTime(data['createdAt']))
-                          .toString(),
+                      typeLabel: getTypeLabel(type),
+                      date: formatDate(createdAt),
+                      clock:
+                          (data['time'] ?? '').toString().isNotEmpty &&
+                              data['time'].toString() != 'تنبيه'
+                          ? data['time'].toString()
+                          : formatTime(createdAt),
                       type: type,
+                      icon: getIcon(type),
+                      color: getColor(type),
                     ),
                   );
                 },
@@ -198,62 +234,29 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 class NotificationCard extends StatelessWidget {
   final String title;
   final String message;
-  final String time;
+  final String typeLabel;
+  final String date;
+  final String clock;
   final String type;
+  final IconData icon;
+  final Color color;
 
   const NotificationCard({
     super.key,
     required this.title,
     required this.message,
-    required this.time,
+    required this.typeLabel,
+    required this.date,
+    required this.clock,
     required this.type,
+    required this.icon,
+    required this.color,
   });
-
-  IconData getIcon() {
-    switch (type) {
-      case 'medication':
-        return Icons.medication_outlined;
-      case 'warning':
-        return Icons.warning_amber_rounded;
-      case 'sos':
-        return Icons.sos;
-      default:
-        return Icons.notifications_rounded;
-    }
-  }
-
-  Color getColor() {
-    switch (type) {
-      case 'medication':
-        return const Color(0xFF1E3A5F);
-      case 'warning':
-        return const Color(0xFFED6C02);
-      case 'sos':
-        return const Color(0xFFD32F2F);
-      default:
-        return const Color(0xFF1E3A5F);
-    }
-  }
-
-  String getTypeLabel() {
-    switch (type) {
-      case 'medication':
-        return 'تنبيه دواء';
-      case 'warning':
-        return 'تنبيه صحي / AI';
-      case 'sos':
-        return 'تنبيه طوارئ';
-      default:
-        return 'تنبيه عام';
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
-    final color = getColor();
-
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(22),
@@ -267,6 +270,7 @@ class NotificationCard extends StatelessWidget {
         ],
       ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
             width: 62,
@@ -275,7 +279,7 @@ class NotificationCard extends StatelessWidget {
               color: color.withOpacity(0.12),
               borderRadius: BorderRadius.circular(18),
             ),
-            child: Icon(getIcon(), color: color, size: 32),
+            child: Icon(icon, color: color, size: 32),
           ),
           const SizedBox(width: 16),
           Expanded(
@@ -283,12 +287,13 @@ class NotificationCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  getTypeLabel(),
+                  typeLabel,
                   textAlign: TextAlign.right,
                   style: TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.w900,
                     color: color,
+                    fontFamily: 'Cairo',
                   ),
                 ),
                 const SizedBox(height: 5),
@@ -296,9 +301,10 @@ class NotificationCard extends StatelessWidget {
                   title,
                   textAlign: TextAlign.right,
                   style: const TextStyle(
-                    fontSize: 22,
+                    fontSize: 21,
                     fontWeight: FontWeight.w900,
                     color: Colors.black,
+                    fontFamily: 'Cairo',
                   ),
                 ),
                 const SizedBox(height: 8),
@@ -306,23 +312,55 @@ class NotificationCard extends StatelessWidget {
                   message,
                   textAlign: TextAlign.right,
                   style: const TextStyle(
-                    fontSize: 18,
+                    fontSize: 17,
                     fontWeight: FontWeight.w800,
                     color: Colors.black,
                     height: 1.5,
+                    fontFamily: 'Cairo',
                   ),
                 ),
-                const SizedBox(height: 10),
-                Text(
-                  time,
-                  textAlign: TextAlign.right,
-                  style: TextStyle(
-                    fontSize: 17,
-                    fontWeight: FontWeight.w900,
-                    color: color,
-                  ),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    _miniInfo(
+                      Icons.calendar_month_rounded,
+                      date.isEmpty ? 'بدون تاريخ' : date,
+                    ),
+                    _miniInfo(
+                      Icons.access_time_rounded,
+                      clock.isEmpty ? 'بدون ساعة' : clock,
+                    ),
+                  ],
                 ),
               ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _miniInfo(IconData icon, String text) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 18, color: color),
+          const SizedBox(width: 5),
+          Text(
+            text,
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w900,
+              color: color,
+              fontFamily: 'Cairo',
             ),
           ),
         ],

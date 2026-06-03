@@ -385,40 +385,24 @@ class _MedicationListScreenState extends State<MedicationListScreen> {
             ],
           ),
           const SizedBox(height: 14),
-          Row(
+          Wrap(
+            alignment: WrapAlignment.end,
+            spacing: 10,
+            runSpacing: 10,
             children: [
-              const Icon(
-                Icons.access_time_rounded,
-                color: AppColors.warning,
-                size: 25,
+              _infoChip(
+                icon: Icons.access_time_rounded,
+                text: timesText,
+                iconColor: AppColors.warning,
+                backgroundColor: const Color(0xFFFFF3E0),
               ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  timesText,
-                  textAlign: TextAlign.right,
-                  style: const TextStyle(
-                    fontSize: 19,
-                    fontWeight: FontWeight.w900,
-                    color: Colors.black,
-                  ),
+              if (dose.trim().isNotEmpty)
+                _infoChip(
+                  icon: Icons.medical_services_rounded,
+                  text: dose,
+                  iconColor: AppColors.primary,
+                  backgroundColor: const Color(0xFFEAF2FA),
                 ),
-              ),
-              const SizedBox(width: 10),
-              const Icon(
-                Icons.medical_services_rounded,
-                color: AppColors.primary,
-                size: 25,
-              ),
-              const SizedBox(width: 8),
-              Text(
-                dose,
-                style: const TextStyle(
-                  fontSize: 19,
-                  fontWeight: FontWeight.w900,
-                  color: Colors.black,
-                ),
-              ),
             ],
           ),
           const SizedBox(height: 14),
@@ -517,6 +501,44 @@ class _MedicationListScreenState extends State<MedicationListScreen> {
             ],
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _infoChip({
+    required IconData icon,
+    required String text,
+    required Color iconColor,
+    required Color backgroundColor,
+  }) {
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 220),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: backgroundColor,
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: iconColor, size: 22),
+            const SizedBox(width: 6),
+            Flexible(
+              child: Text(
+                text,
+                overflow: TextOverflow.ellipsis,
+                maxLines: 2,
+                textAlign: TextAlign.right,
+                style: const TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w800,
+                  color: Colors.black,
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

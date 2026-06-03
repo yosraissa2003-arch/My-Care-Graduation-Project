@@ -444,7 +444,22 @@ class HomeScreen extends StatelessWidget {
           );
         }
 
-        final meds = snapshot.data?.docs ?? [];
+        if (snapshot.hasError) {
+          return _emptyCard('حدث خطأ أثناء تحميل أدوية اليوم');
+        }
+
+        final meds = [...(snapshot.data?.docs ?? [])];
+
+        meds.sort((a, b) {
+          final aTime = a.data()['createdAt'];
+          final bTime = b.data()['createdAt'];
+
+          if (aTime is Timestamp && bTime is Timestamp) {
+            return bTime.compareTo(aTime);
+          }
+
+          return 0;
+        });
 
         if (meds.isEmpty) {
           return _emptyCard('لا توجد أدوية اليوم');
@@ -453,12 +468,30 @@ class HomeScreen extends StatelessWidget {
         return Column(
           children: meds.map((doc) {
             final med = doc.data();
+            final List times = med['times'] is List ? med['times'] : [];
+            final timeText = times.isEmpty
+                ? ((med['time'] ?? 'عند الحاجة').toString())
+                : times.join('، ');
+
+            final createdAt = med['createdAt'];
+            final createdDate = createdAt is Timestamp
+                ? createdAt.toDate()
+                : null;
 
             return _medCard(
               docId: doc.id,
               name: (med['name'] ?? 'دواء').toString(),
-              time: (med['time'] ?? '').toString(),
-              taken: med['taken'] == true,
+              time: timeText,
+              dateText: createdDate == null
+                  ? 'بدون تاريخ'
+                  : _formatDate(createdDate),
+              createdTimeText: createdDate == null
+                  ? ''
+                  : _formatTime(createdDate),
+              taken: med['isTaken'] == true || med['taken'] == true,
+              allergyWarning: med['allergyWarning'] == true,
+              allergyWarningMessage: (med['allergyWarningMessage'] ?? '')
+                  .toString(),
             );
           }).toList(),
         );
@@ -661,7 +694,11 @@ class HomeScreen extends StatelessWidget {
     required String docId,
     required String name,
     required String time,
+    required String dateText,
+    required String createdTimeText,
     required bool taken,
+    bool allergyWarning = false,
+    String allergyWarningMessage = '',
   }) {
     return Container(
       width: double.infinity,
@@ -700,84 +737,162 @@ class HomeScreen extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 16),
-          Row(
-            children: [
-              StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-                stream: FirebaseFirestore.instance
-                    .collection('medications')
-                    .doc(docId)
-                    .snapshots(),
-                builder: (context, snapshot) {
-                  final currentTaken = snapshot.data?.data()?['taken'] == true
-                      ? true
-                      : taken;
-
-                  return InkWell(
-                    onTap: () async {
-                      await FirebaseFirestore.instance
-                          .collection('medications')
-                          .doc(docId)
-                          .update({'taken': !currentTaken});
-                    },
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        vertical: 8,
-                        horizontal: 12,
-                      ),
-                      decoration: BoxDecoration(
-                        color: currentTaken
-                            ? const Color(0xffE4F3E8)
-                            : const Color(0xffFFE5E5),
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            currentTaken
-                                ? Icons.check_circle
-                                : Icons.radio_button_unchecked,
-                            color: currentTaken ? successColor : errorColor,
-                            size: 24,
-                          ),
-                          const SizedBox(width: 6),
-                          Text(
-                            currentTaken ? 'تم أخذه' : 'لم يتم أخذه',
-                            style: TextStyle(
-                              color: currentTaken ? successColor : errorColor,
-                              fontSize: 16,
-                              fontFamily: 'Cairo',
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
-                },
+          if (allergyWarning) ...[
+            const SizedBox(height: 12),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFF3E0),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: warningColor),
               ),
-              const Spacer(),
-              Row(
+              child: Row(
                 children: [
                   const Icon(
-                    Icons.access_time_rounded,
+                    Icons.warning_amber_rounded,
+                    color: warningColor,
                     size: 24,
-                    color: Color(0xff755BB5),
                   ),
-                  const SizedBox(width: 6),
-                  Text(
-                    time,
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontFamily: 'Cairo',
-                      color: textColor,
-                      fontWeight: FontWeight.bold,
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      allergyWarningMessage.isEmpty
+                          ? 'تحذير حساسية: هذا الدواء قد لا يناسب المريض'
+                          : allergyWarningMessage,
+                      textAlign: TextAlign.right,
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontFamily: 'Cairo',
+                        color: warningColor,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
                 ],
               ),
-            ],
+            ),
+          ],
+          const SizedBox(height: 16),
+
+          StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+            stream: FirebaseFirestore.instance
+                .collection('medications')
+                .doc(docId)
+                .snapshots(),
+            builder: (context, snapshot) {
+              final medication = snapshot.data?.data();
+              final currentTaken =
+                  medication?['isTaken'] == true ||
+                  medication?['taken'] == true ||
+                  taken;
+
+              return Align(
+                alignment: Alignment.centerRight,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(14),
+                  onTap: () async {
+                    await FirebaseFirestore.instance
+                        .collection('medications')
+                        .doc(docId)
+                        .update({
+                          'isTaken': !currentTaken,
+                          'taken': !currentTaken,
+                          'takenAt': !currentTaken
+                              ? FieldValue.serverTimestamp()
+                              : null,
+                        });
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 8,
+                      horizontal: 12,
+                    ),
+                    decoration: BoxDecoration(
+                      color: currentTaken
+                          ? const Color(0xffE4F3E8)
+                          : const Color(0xffFFE5E5),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          currentTaken
+                              ? Icons.check_circle
+                              : Icons.radio_button_unchecked,
+                          color: currentTaken ? successColor : errorColor,
+                          size: 24,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          currentTaken ? 'تم أخذه' : 'لم يتم أخذه',
+                          style: TextStyle(
+                            color: currentTaken ? successColor : errorColor,
+                            fontSize: 16,
+                            fontFamily: 'Cairo',
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+
+          const SizedBox(height: 14),
+
+          Align(
+            alignment: Alignment.centerRight,
+            child: Wrap(
+              alignment: WrapAlignment.end,
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                _medMiniInfo(Icons.access_time_rounded, time),
+                _medMiniInfo(Icons.calendar_month_rounded, dateText),
+                if (createdTimeText.isNotEmpty)
+                  _medMiniInfo(Icons.update_rounded, createdTimeText),
+              ],
+            ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _medMiniInfo(IconData icon, String text) {
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 155),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: const Color(0xffE2DAF3)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 18, color: const Color(0xff755BB5)),
+            const SizedBox(width: 5),
+            Flexible(
+              child: Text(
+                text,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontFamily: 'Cairo',
+                  color: textColor,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1104,6 +1219,19 @@ class HomeScreen extends StatelessWidget {
     if (value is double) return value.toInt();
     if (value is String) return int.tryParse(value) ?? 0;
     return 0;
+  }
+
+  String _formatDate(DateTime date) {
+    return '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
+  }
+
+  String _formatTime(DateTime date) {
+    int hour = date.hour;
+    final minute = date.minute.toString().padLeft(2, '0');
+    final period = hour >= 12 ? 'مساءً' : 'صباحًا';
+    if (hour > 12) hour -= 12;
+    if (hour == 0) hour = 12;
+    return '${hour.toString().padLeft(2, '0')}:$minute $period';
   }
 
   String getHealthStatus({
