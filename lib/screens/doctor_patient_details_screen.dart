@@ -57,6 +57,11 @@ class _DoctorPatientDetailsScreenState
         .where('patientId', isEqualTo: widget.patientId)
         .get();
 
+    final moodSnapshot = await FirebaseFirestore.instance
+        .collection('moodLogs')
+        .where('userId', isEqualTo: widget.patientId)
+        .get();
+
     final healthLogs = healthLogsSnapshot.docs.toList();
     healthLogs.sort((a, b) {
       final aTime = a.data()['createdAt'];
@@ -81,10 +86,38 @@ class _DoctorPatientDetailsScreenState
       return 0;
     });
 
+    final moodLogs = moodSnapshot.docs.toList();
+    moodLogs.sort((a, b) {
+      final aTime = a.data()['createdAt'];
+      final bTime = b.data()['createdAt'];
+
+      if (aTime is Timestamp && bTime is Timestamp) {
+        return bTime.compareTo(aTime);
+      }
+
+      return 0;
+    });
+
+    Map<String, dynamic> todayMood = {};
+    final today = _todayKey();
+
+    for (final moodDoc in moodLogs) {
+      final mood = moodDoc.data();
+      if ((mood['dateKey'] ?? '').toString() == today) {
+        todayMood = mood;
+        break;
+      }
+    }
+
+    if (todayMood.isEmpty && moodLogs.isNotEmpty) {
+      todayMood = moodLogs.first.data();
+    }
+
     return {
       'user': userDoc.data() ?? {},
       'medical': medicalDoc.data() ?? {},
       'lastHealthLog': healthLogs.isNotEmpty ? healthLogs.first.data() : {},
+      'latestMood': todayMood,
       'notes': notes.map((e) => e.data()).toList(),
     };
   }
@@ -116,6 +149,45 @@ class _DoctorPatientDetailsScreenState
     }
 
     return '';
+  }
+
+  String _todayKey() {
+    final now = DateTime.now();
+    return '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+  }
+
+  String getMoodEmoji(Map<String, dynamic> mood) {
+    final emoji = (mood['emoji'] ?? '').toString().trim();
+    if (emoji.isNotEmpty) return emoji;
+
+    final text = '${mood['moodLabel'] ?? mood['label'] ?? mood['mood'] ?? ''}';
+
+    if (text.contains('جيد') ||
+        text.contains('سعيد') ||
+        text.contains('good')) {
+      return '🙂';
+    }
+    if (text.contains('حزين') || text.contains('sad')) {
+      return '😢';
+    }
+    if (text.contains('متعب') || text.contains('tired')) {
+      return '😐';
+    }
+
+    return '😐';
+  }
+
+  String getMoodLabel(Map<String, dynamic> mood) {
+    final label = (mood['moodLabel'] ?? mood['label'] ?? '').toString().trim();
+    if (label.isNotEmpty) return label;
+
+    final value = (mood['mood'] ?? '').toString().trim().toLowerCase();
+
+    if (value == 'good') return 'جيد';
+    if (value == 'tired') return 'متعب';
+    if (value == 'sad') return 'حزين';
+
+    return value.isEmpty ? 'غير محدد' : value;
   }
 
   String getRiskStatus(Map<String, dynamic> readings) {
@@ -342,6 +414,8 @@ class _DoctorPatientDetailsScreenState
             final lastHealthLog =
                 (data['lastHealthLog'] ?? {}) as Map<String, dynamic>;
             final notes = (data['notes'] ?? []) as List;
+            final latestMood =
+                (data['latestMood'] ?? {}) as Map<String, dynamic>;
 
             final status = getRiskStatus(lastHealthLog);
 
@@ -353,6 +427,19 @@ class _DoctorPatientDetailsScreenState
                   buildStatusCard(status),
 
                   const SizedBox(height: 16),
+
+                  buildInfoCard(
+                    title: 'مزاج المريض',
+                    icon: Icons.mood,
+                    children: [
+                      buildRow(
+                        'مزاج اليوم',
+                        latestMood.isEmpty
+                            ? 'لم يسجل المريض مزاجه اليوم'
+                            : '${getMoodEmoji(latestMood)} ${getMoodLabel(latestMood)}',
+                      ),
+                    ],
+                  ),
 
                   buildInfoCard(
                     title: 'البيانات الأساسية',
