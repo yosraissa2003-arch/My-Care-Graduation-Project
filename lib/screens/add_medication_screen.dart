@@ -1,13 +1,12 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_tts/flutter_tts.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:timezone/data/latest.dart' as tzdata;
-import 'package:timezone/timezone.dart' as tz;
+import 'package:mycare/services/notification_service.dart';
 
 import 'notifications_screen.dart';
 
@@ -19,6 +18,7 @@ class AddMedicationScreen extends StatefulWidget {
 }
 
 class _AddMedicationScreenState extends State<AddMedicationScreen> {
+  final FlutterTts _tts = FlutterTts();
   final TextEditingController nameController = TextEditingController();
   final TextEditingController remainingPillsController =
       TextEditingController();
@@ -36,10 +36,6 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
 
   File? selectedImage;
   bool isLoading = false;
-
-  final FlutterLocalNotificationsPlugin localNotifications =
-      FlutterLocalNotificationsPlugin();
-  bool localNotificationsInitialized = false;
 
   final List<String> doses = const [
     'نصف حبة',
@@ -116,7 +112,92 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
   final List<String> importanceLevels = const ['عادي', 'مهم', 'ضروري جدًا'];
 
   @override
+  void initState() {
+    super.initState();
+    _setupTts();
+  }
+
+  Future<void> _setupTts() async {
+    await _tts.setLanguage('ar');
+    await _tts.setSpeechRate(0.45);
+    await _tts.setVolume(1.0);
+    await _tts.setPitch(1.0);
+  }
+
+  Future<void> _speak(String text) async {
+    if (text.trim().isEmpty) return;
+    await _tts.stop();
+    await _tts.speak(text);
+  }
+
+  String _selectedMedicationVoiceText() {
+    final name = nameController.text.trim().isEmpty
+        ? 'اسم الدواء غير مدخل بعد'
+        : nameController.text.trim();
+
+    final timesText = getSelectedTimes().isEmpty
+        ? 'عند الحاجة'
+        : getSelectedTimes().join('، ');
+
+    final remaining = remainingPillsController.text.trim().isEmpty
+        ? ''
+        : 'عدد الحبات المتبقية ${remainingPillsController.text.trim()}.';
+
+    final notes = notesController.text.trim().isEmpty
+        ? ''
+        : 'ملاحظات: ${notesController.text.trim()}.';
+
+    return 'ملخص الدواء. اسم الدواء $name. الجرعة $selectedDose. '
+        'عدد مرات الاستخدام $selectedFrequency. موعد الدواء $timesText. '
+        'طريقة الاستخدام $selectedPeriod. مدة الاستخدام $selectedDuration. '
+        'الأهمية $selectedImportance. $remaining $notes';
+  }
+
+  Widget buildVoiceAssistantCard() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF1F8FC),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: const Color(0xFFD7E6F5), width: 1.2),
+      ),
+      child: Row(
+        children: [
+          CircleAvatar(
+            radius: 28,
+            backgroundColor: const Color(0xFF1E3A5F),
+            child: IconButton(
+              icon: const Icon(
+                Icons.volume_up_rounded,
+                color: Colors.white,
+                size: 30,
+              ),
+              onPressed: () => _speak(_selectedMedicationVoiceText()),
+            ),
+          ),
+          const SizedBox(width: 14),
+          const Expanded(
+            child: Text(
+              'اضغطي على الصوت ليسمع المريض ملخص الدواء وموعده قبل الحفظ.',
+              textAlign: TextAlign.right,
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w900,
+                color: Color(0xFF1E3A5F),
+                height: 1.5,
+                fontFamily: 'Cairo',
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
   void dispose() {
+    _tts.stop();
     nameController.dispose();
     remainingPillsController.dispose();
     notesController.dispose();
@@ -173,102 +254,6 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
     } catch (e) {
       debugPrint('Medication image upload error: $e');
       return null;
-    }
-  }
-
-  Future<void> initLocalNotifications() async {
-    if (localNotificationsInitialized) return;
-
-    tzdata.initializeTimeZones();
-
-    const androidSettings = AndroidInitializationSettings(
-      '@mipmap/ic_launcher',
-    );
-    const initSettings = InitializationSettings(android: androidSettings);
-
-    await localNotifications.initialize(initSettings);
-
-    final androidPlugin = localNotifications
-        .resolvePlatformSpecificImplementation<
-          AndroidFlutterLocalNotificationsPlugin
-        >();
-
-    await androidPlugin?.requestNotificationsPermission();
-    await androidPlugin?.requestExactAlarmsPermission();
-
-    localNotificationsInitialized = true;
-  }
-
-  int _notificationIdFor(String medicineName, int index) {
-    final base = medicineName.hashCode.abs() % 100000;
-    return base + index + DateTime.now().millisecondsSinceEpoch % 10000;
-  }
-
-  DateTime? _timeTextToDateTime(String timeText) {
-    final text = timeText.trim();
-    final match = RegExp(r'(\d{1,2}):(\d{2})').firstMatch(text);
-    if (match == null) return null;
-
-    int hour = int.tryParse(match.group(1) ?? '') ?? 8;
-    final int minute = int.tryParse(match.group(2) ?? '') ?? 0;
-
-    final bool isPm = text.contains('مساء') || text.contains('ظهر');
-    final bool isAm = text.contains('صباح');
-
-    if (isPm && hour < 12) hour += 12;
-    if (isAm && hour == 12) hour = 0;
-
-    final now = DateTime.now();
-    DateTime scheduled = DateTime(now.year, now.month, now.day, hour, minute);
-
-    if (scheduled.isBefore(now.add(const Duration(seconds: 20)))) {
-      scheduled = scheduled.add(const Duration(days: 1));
-    }
-
-    return scheduled;
-  }
-
-  Future<void> scheduleMedicationLocalNotifications({
-    required String medicationName,
-    required List<String> selectedTimes,
-  }) async {
-    if (selectedTimes.isEmpty) return;
-
-    try {
-      await initLocalNotifications();
-
-      const androidDetails = AndroidNotificationDetails(
-        'mycare_medication_channel',
-        'تذكيرات الأدوية',
-        channelDescription: 'تنبيهات مواعيد الأدوية اليومية',
-        importance: Importance.max,
-        priority: Priority.max,
-        playSound: true,
-        enableVibration: true,
-        ticker: 'موعد الدواء',
-        category: AndroidNotificationCategory.reminder,
-        visibility: NotificationVisibility.public,
-        fullScreenIntent: true,
-      );
-
-      const details = NotificationDetails(android: androidDetails);
-
-      for (int i = 0; i < selectedTimes.length; i++) {
-        final scheduledDate = _timeTextToDateTime(selectedTimes[i]);
-        if (scheduledDate == null) continue;
-
-        await localNotifications.zonedSchedule(
-          _notificationIdFor(medicationName, i),
-          'موعد الدواء',
-          'لديك حبة دواء الآن: $medicationName',
-          tz.TZDateTime.from(scheduledDate, tz.local),
-          details,
-          androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-          matchDateTimeComponents: DateTimeComponents.time,
-        );
-      }
-    } catch (e) {
-      debugPrint('Schedule medication notification error: $e');
     }
   }
 
@@ -743,6 +728,11 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
     });
   }
 
+  String _todayKey() {
+    final now = DateTime.now();
+    return '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+  }
+
   Future<void> saveMedication() async {
     final name = nameController.text.trim();
     final remainingPills = remainingPillsController.text.trim();
@@ -824,17 +814,21 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
         'time3': selectedFrequency == 'ثلاث مرات يوميًا' ? selectedTime3 : null,
         'isActive': true,
         'isTaken': false,
+        'taken': false,
+        'lastTakenDateKey': '',
+        'createdDateKey': _todayKey(),
         'allergyWarning': allergyWarning != null,
         'allergyWarningMessage': allergyWarning?['message'],
         'allergyWarningName': allergyWarning?['allergyName'],
         'createdAt': FieldValue.serverTimestamp(),
       };
 
-      await FirebaseFirestore.instance
+      final medicationRef = await FirebaseFirestore.instance
           .collection('medications')
           .add(medicationData);
 
-      await scheduleMedicationLocalNotifications(
+      await NotificationService.scheduleMedicationReminders(
+        medicationId: medicationRef.id,
         medicationName: name,
         selectedTimes: selectedTimes,
       );
@@ -1287,6 +1281,8 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
             child: Column(
               children: [
                 buildTipCard(),
+                const SizedBox(height: 16),
+                buildVoiceAssistantCard(),
                 const SizedBox(height: 20),
                 buildImagePickerCard(),
                 const SizedBox(height: 16),

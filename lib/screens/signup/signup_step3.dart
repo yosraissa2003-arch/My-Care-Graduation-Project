@@ -3,7 +3,7 @@ import 'package:flutter/services.dart';
 import 'signup_step4.dart';
 
 class SignUpStep3 extends StatefulWidget {
-  final String role, fullName, phone, password, age, gender, relation;
+  final String role, fullName, phone, email, password, age, gender, relation;
   final String linkedPhone, doctorPhone, inviteCode;
   final String doctorSpecialty, doctorWorkplace, doctorLicenseNumber;
 
@@ -12,6 +12,7 @@ class SignUpStep3 extends StatefulWidget {
     required this.role,
     required this.fullName,
     required this.phone,
+    required this.email,
     required this.password,
     required this.age,
     required this.gender,
@@ -318,6 +319,7 @@ class _SignUpStep3State extends State<SignUpStep3> {
           role: widget.role,
           fullName: widget.fullName,
           phone: widget.phone,
+          email: widget.email,
           password: widget.password,
           age: widget.age,
           gender: widget.gender,
@@ -636,6 +638,7 @@ class _SignUpStep3State extends State<SignUpStep3> {
               role: widget.role,
               fullName: widget.fullName,
               phone: widget.phone,
+              email: widget.email,
               password: widget.password,
               age: widget.age,
               gender: widget.gender,

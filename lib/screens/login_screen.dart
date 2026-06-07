@@ -29,6 +29,7 @@ class _LoginScreenState extends State<LoginScreen> {
   static const Color secondaryTextColor = Color(0xFF4B5563);
   static const Color warningColor = Color(0xFFED6C02);
   static const Color errorColor = Color(0xFFD32F2F);
+  static const Color successColor = Color(0xFF2E7D32);
 
   @override
   void dispose() {
@@ -66,6 +67,85 @@ class _LoginScreenState extends State<LoginScreen> {
 
   String generateEmailFromPhone(String normalizedPhone) {
     return '$normalizedPhone@test.com';
+  }
+
+  Set<String> phoneSearchVariants(String phone) {
+    final cleaned = phone.replaceAll(RegExp(r'[^0-9]'), '');
+    final variants = <String>{};
+
+    if (cleaned.isEmpty) return variants;
+
+    variants.add(cleaned);
+
+    final normalized = normalizePhoneNumber(cleaned);
+    if (normalized != null) {
+      variants.add(normalized);
+      if (normalized.startsWith('970') || normalized.startsWith('972')) {
+        variants.add('0${normalized.substring(3)}');
+      }
+    }
+
+    if (cleaned.startsWith('970') && cleaned.length >= 12) {
+      variants.add('0${cleaned.substring(3)}');
+    }
+
+    if (cleaned.startsWith('972') && cleaned.length >= 12) {
+      variants.add('0${cleaned.substring(3)}');
+    }
+
+    if (cleaned.startsWith('0') && cleaned.length == 10) {
+      variants.add('970${cleaned.substring(1)}');
+      variants.add('972${cleaned.substring(1)}');
+    }
+
+    return variants.where((item) => item.trim().isNotEmpty).toSet();
+  }
+
+  Future<DocumentSnapshot<Map<String, dynamic>>?> findUserByPhone(
+    String phone,
+  ) async {
+    final variants = phoneSearchVariants(phone);
+
+    for (final variant in variants) {
+      final byPhone = await FirebaseFirestore.instance
+          .collection('users')
+          .where('phone', isEqualTo: variant)
+          .limit(1)
+          .get();
+
+      if (byPhone.docs.isNotEmpty) {
+        return byPhone.docs.first;
+      }
+
+      final byOriginalPhone = await FirebaseFirestore.instance
+          .collection('users')
+          .where('originalPhone', isEqualTo: variant)
+          .limit(1)
+          .get();
+
+      if (byOriginalPhone.docs.isNotEmpty) {
+        return byOriginalPhone.docs.first;
+      }
+    }
+
+    return null;
+  }
+
+  Future<String?> getEmailForLogin(String phone) async {
+    final userDoc = await findUserByPhone(phone);
+    if (userDoc != null) {
+      final data = userDoc.data() ?? {};
+      final email = (data['email'] ?? '').toString().trim();
+
+      if (email.isNotEmpty) {
+        return email;
+      }
+    }
+
+    final normalizedPhone = normalizePhoneNumber(phone);
+    if (normalizedPhone == null) return null;
+
+    return generateEmailFromPhone(normalizedPhone);
   }
 
   Future<void> showMessage(String message, {Color color = primaryColor}) async {
@@ -140,7 +220,15 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => isLoading = true);
 
     try {
-      final email = generateEmailFromPhone(normalizedPhone);
+      final email = await getEmailForLogin(phone);
+
+      if (email == null || email.isEmpty) {
+        showMessage(
+          'لم يتم العثور على بريد إلكتروني لهذا الرقم',
+          color: errorColor,
+        );
+        return;
+      }
 
       final user = await FirebaseAuth.instance.signInWithEmailAndPassword(
         email: email,
@@ -192,6 +280,100 @@ class _LoginScreenState extends State<LoginScreen> {
           break;
         default:
           showMessage('فشل تسجيل الدخول', color: errorColor);
+      }
+    } on FirebaseException catch (e) {
+      if (e.code == 'permission-denied') {
+        showMessage(
+          'لا يمكن البحث عن الحساب قبل تسجيل الدخول. راجعي Firestore Rules.',
+          color: errorColor,
+        );
+      } else {
+        showMessage('حدث خطأ في Firebase', color: errorColor);
+      }
+    } catch (_) {
+      showMessage('حدث خطأ غير متوقع', color: errorColor);
+    } finally {
+      if (mounted) setState(() => isLoading = false);
+    }
+  }
+
+  Future<void> resetPasswordByPhone(String phone) async {
+    if (isLoading) return;
+
+    if (phone.trim().isEmpty) {
+      showMessage('أدخلي رقم الهاتف أولاً', color: errorColor);
+      return;
+    }
+
+    final normalizedPhone = normalizePhoneNumber(phone);
+
+    if (normalizedPhone == null) {
+      showMessage('رقم الهاتف غير صحيح', color: errorColor);
+      return;
+    }
+
+    setState(() => isLoading = true);
+
+    try {
+      final userDoc = await findUserByPhone(phone);
+
+      if (userDoc == null || !userDoc.exists) {
+        showMessage('لا يوجد حساب بهذا الرقم', color: errorColor);
+        return;
+      }
+
+      final data = userDoc.data() ?? {};
+      final email = (data['email'] ?? '').toString().trim();
+
+      if (email.isEmpty) {
+        showMessage(
+          'هذا الحساب لا يحتوي على بريد إلكتروني لإعادة كلمة المرور',
+          color: errorColor,
+        );
+        return;
+      }
+
+      if (email.endsWith('@test.com')) {
+        showMessage(
+          'هذا الحساب مربوط بإيميل تجريبي. عدّلي الإيميل في Authentication و Firestore لإيميل حقيقي.',
+          color: warningColor,
+        );
+        return;
+      }
+
+      await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
+
+      if (!mounted) return;
+
+      showMessage(
+        'تم إرسال رابط إعادة تعيين كلمة المرور إلى البريد الإلكتروني',
+        color: successColor,
+      );
+    } on FirebaseAuthException catch (e) {
+      switch (e.code) {
+        case 'user-not-found':
+          showMessage(
+            'لا يوجد مستخدم بهذا البريد في Authentication',
+            color: errorColor,
+          );
+          break;
+        case 'invalid-email':
+          showMessage('البريد الإلكتروني غير صحيح', color: errorColor);
+          break;
+        case 'network-request-failed':
+          showMessage('تحققي من اتصال الإنترنت', color: errorColor);
+          break;
+        default:
+          showMessage('تعذر إرسال رابط إعادة التعيين', color: errorColor);
+      }
+    } on FirebaseException catch (e) {
+      if (e.code == 'permission-denied') {
+        showMessage(
+          'لا يمكن البحث عن الحساب. راجعي Firestore Rules.',
+          color: errorColor,
+        );
+      } else {
+        showMessage('حدث خطأ في Firebase', color: errorColor);
       }
     } catch (_) {
       showMessage('حدث خطأ غير متوقع', color: errorColor);
@@ -318,7 +500,28 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                     ),
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 6),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton(
+                      onPressed: isLoading
+                          ? null
+                          : () {
+                              FocusScope.of(context).unfocus();
+                              resetPasswordByPhone(phoneController.text.trim());
+                            },
+                      child: const Text(
+                        'نسيت كلمة المرور؟',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontFamily: 'Cairo',
+                          fontWeight: FontWeight.bold,
+                          color: primaryColor,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
                   SizedBox(
                     height: 56,
                     child: ElevatedButton.icon(

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_tts/flutter_tts.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
@@ -13,6 +14,103 @@ class HealthHistoryReportsScreen extends StatelessWidget {
   static const Color softBlue = Color(0xffF1F8FC);
   static const Color softPurple = Color(0xffF7F3FF);
   static const Color border = Color(0xffE5E5E5);
+
+  Future<void> _speak(String text) async {
+    if (text.trim().isEmpty) return;
+
+    final tts = FlutterTts();
+    await tts.setLanguage('ar');
+    await tts.setSpeechRate(0.45);
+    await tts.setVolume(1.0);
+    await tts.setPitch(1.0);
+    await tts.speak(text);
+  }
+
+  String _summaryVoiceText({
+    required HealthReport latest,
+    required int count,
+    required int criticalCount,
+    required double avgHeart,
+    required double avgGlucose,
+  }) {
+    final evaluation = latest.status == 'خطر'
+        ? 'تم اكتشاف قراءة خطيرة، يفضل مراجعة الطبيب.'
+        : latest.status == 'تحتاج متابعة'
+        ? 'توجد قراءة تحتاج متابعة خلال اليوم.'
+        : 'الحالة مستقرة حاليا.';
+
+    return 'ملخص التقرير الصحي. الحالة الصحية العامة ${latest.status}. '
+        'عدد القراءات $count. عدد الحالات الخطرة $criticalCount. '
+        'متوسط النبض ${avgHeart.toStringAsFixed(0)}. '
+        'متوسط السكر ${avgGlucose.toStringAsFixed(0)}. '
+        'آخر قراءة: النبض ${latest.heartRate}، الضغط ${latest.systolic} على ${latest.diastolic}، '
+        'السكر ${latest.glucose}، الأكسجين ${latest.oxygen}، والحرارة ${latest.temperature.toStringAsFixed(1)}. '
+        '$evaluation';
+  }
+
+  String _singleReportVoiceText(HealthReport report) {
+    return 'تفاصيل القراءة الصحية. الحالة ${report.status}. '
+        'النبض ${report.heartRate}. الضغط ${report.systolic} على ${report.diastolic}. '
+        'السكر ${report.glucose}. الأكسجين ${report.oxygen}. '
+        'الحرارة ${report.temperature.toStringAsFixed(1)}. '
+        'التاريخ ${_formatDate(report.date)} الساعة ${_formatTime(report.date)}.';
+  }
+
+  Widget _voiceSummaryCard({
+    required HealthReport latest,
+    required int count,
+    required int criticalCount,
+    required double avgHeart,
+    required double avgGlucose,
+  }) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: softBlue,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: border),
+      ),
+      child: Row(
+        children: [
+          CircleAvatar(
+            radius: 28,
+            backgroundColor: dark,
+            child: IconButton(
+              icon: const Icon(
+                Icons.volume_up_rounded,
+                color: Colors.white,
+                size: 30,
+              ),
+              onPressed: () => _speak(
+                _summaryVoiceText(
+                  latest: latest,
+                  count: count,
+                  criticalCount: criticalCount,
+                  avgHeart: avgHeart,
+                  avgGlucose: avgGlucose,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 14),
+          const Expanded(
+            child: Text(
+              'اسمع ملخص التقرير الصحي والحالة العامة والقراءات الأخيرة.',
+              textAlign: TextAlign.right,
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w900,
+                color: dark,
+                height: 1.5,
+                fontFamily: 'Cairo',
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -159,6 +257,14 @@ class HealthHistoryReportsScreen extends StatelessWidget {
                 padding: const EdgeInsets.all(18),
                 children: [
                   _summaryCard(latest, reports.length, criticalCount),
+                  const SizedBox(height: 12),
+                  _voiceSummaryCard(
+                    latest: latest,
+                    count: reports.length,
+                    criticalCount: criticalCount,
+                    avgHeart: avgHeart,
+                    avgGlucose: avgGlucose,
+                  ),
                   const SizedBox(height: 18),
                   Row(
                     children: [
@@ -427,6 +533,30 @@ class HealthHistoryReportsScreen extends StatelessWidget {
           ),
           const SizedBox(height: 14),
           _dateTimeLine('التاريخ والوقت', report.date),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: () => _speak(_singleReportVoiceText(report)),
+              style: OutlinedButton.styleFrom(
+                side: const BorderSide(color: dark, width: 1.4),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                padding: const EdgeInsets.symmetric(vertical: 13),
+              ),
+              icon: const Icon(Icons.volume_up_rounded, color: dark),
+              label: const Text(
+                'اسمع هذه القراءة',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w900,
+                  color: dark,
+                  fontFamily: 'Cairo',
+                ),
+              ),
+            ),
+          ),
         ],
       ),
     );

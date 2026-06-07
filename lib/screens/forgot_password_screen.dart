@@ -18,25 +18,15 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   static const Color secondaryTextColor = Color(0xFF4B5563);
   static const Color errorColor = Color(0xFFD32F2F);
   static const Color successColor = Color(0xFF2E7D32);
+  static const Color warningColor = Color(0xFFED6C02);
 
   final phoneController = TextEditingController();
-  final codeController = TextEditingController();
-  final passwordController = TextEditingController();
-  final confirmController = TextEditingController();
 
   bool isLoading = false;
-  bool codeSent = false;
-  bool showPassword = false;
-  bool showConfirmPassword = false;
-
-  String? verificationId;
 
   @override
   void dispose() {
     phoneController.dispose();
-    codeController.dispose();
-    passwordController.dispose();
-    confirmController.dispose();
     super.dispose();
   }
 
@@ -69,12 +59,31 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     return null;
   }
 
-  String firebaseSmsPhone(String normalizedPhone) {
-    return '+$normalizedPhone';
+  String _digitsOnly(String value) {
+    return value.replaceAll(RegExp(r'[^0-9]'), '');
   }
 
-  String generateEmailFromPhone(String normalizedPhone) {
-    return "$normalizedPhone@test.com";
+  Set<String> _phoneVariants(String inputPhone, String normalizedPhone) {
+    final variants = <String>{};
+    final inputDigits = _digitsOnly(inputPhone);
+
+    if (normalizedPhone.isNotEmpty) variants.add(normalizedPhone);
+    if (inputDigits.isNotEmpty) variants.add(inputDigits);
+
+    if (normalizedPhone.startsWith('970') && normalizedPhone.length >= 12) {
+      variants.add('0${normalizedPhone.substring(3)}');
+    }
+
+    if (normalizedPhone.startsWith('972') && normalizedPhone.length >= 12) {
+      variants.add('0${normalizedPhone.substring(3)}');
+    }
+
+    if (inputDigits.startsWith('0') && inputDigits.length == 10) {
+      variants.add('970${inputDigits.substring(1)}');
+      variants.add('972${inputDigits.substring(1)}');
+    }
+
+    return variants.where((item) => item.trim().isNotEmpty).toSet();
   }
 
   Future<void> showMessage(String message, {Color color = primaryColor}) async {
@@ -88,9 +97,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
         backgroundColor: color,
         behavior: SnackBarBehavior.floating,
         margin: const EdgeInsets.all(20),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         content: Text(
           message,
           textAlign: TextAlign.right,
@@ -109,19 +116,56 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     );
   }
 
-  Future<String?> findUidByPhone(String normalizedPhone) async {
-    final result = await FirebaseFirestore.instance
-        .collection('users')
-        .where('phone', isEqualTo: normalizedPhone)
-        .limit(1)
-        .get();
+  Future<Map<String, dynamic>?> findUserDataByPhone({
+    required String inputPhone,
+    required String normalizedPhone,
+  }) async {
+    final variants = _phoneVariants(inputPhone, normalizedPhone);
 
-    if (result.docs.isEmpty) return null;
+    for (final phone in variants) {
+      final byPhone = await FirebaseFirestore.instance
+          .collection('users')
+          .where('phone', isEqualTo: phone)
+          .limit(5)
+          .get();
 
-    return result.docs.first.id;
+      if (byPhone.docs.isNotEmpty) {
+        final docsWithRealEmail = byPhone.docs.where((doc) {
+          final email = (doc.data()['email'] ?? '').toString().trim();
+          return email.isNotEmpty && !email.endsWith('@test.com');
+        }).toList();
+
+        final selectedDoc = docsWithRealEmail.isNotEmpty
+            ? docsWithRealEmail.first
+            : byPhone.docs.first;
+
+        return {'uid': selectedDoc.id, ...selectedDoc.data()};
+      }
+
+      final byOriginalPhone = await FirebaseFirestore.instance
+          .collection('users')
+          .where('originalPhone', isEqualTo: phone)
+          .limit(5)
+          .get();
+
+      if (byOriginalPhone.docs.isNotEmpty) {
+        final docsWithRealEmail = byOriginalPhone.docs.where((doc) {
+          final email = (doc.data()['email'] ?? '').toString().trim();
+          return email.isNotEmpty && !email.endsWith('@test.com');
+        }).toList();
+
+        final selectedDoc = docsWithRealEmail.isNotEmpty
+            ? docsWithRealEmail.first
+            : byOriginalPhone.docs.first;
+
+        return {'uid': selectedDoc.id, ...selectedDoc.data()};
+      }
+    }
+
+    return null;
   }
 
-  Future<void> sendSmsCode() async {
+  Future<void> sendPasswordResetLink() async {
     if (isLoading) return;
 
     final inputPhone = phoneController.text.trim();
@@ -144,126 +188,70 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     setState(() => isLoading = true);
 
     try {
-      final uid = await findUidByPhone(normalizedPhone);
+      final userData = await findUserDataByPhone(
+        inputPhone: inputPhone,
+        normalizedPhone: normalizedPhone,
+      );
 
-      if (uid == null) {
+      if (userData == null) {
         showMessage('هذا الرقم غير مسجل', color: errorColor);
-        setState(() => isLoading = false);
         return;
       }
 
-      await FirebaseAuth.instance.verifyPhoneNumber(
-        phoneNumber: firebaseSmsPhone(normalizedPhone),
-        timeout: const Duration(seconds: 60),
-        verificationCompleted: (PhoneAuthCredential credential) async {},
-        verificationFailed: (FirebaseAuthException e) {
-          debugPrint('SMS Verification Failed: ${e.code}');
-          if (mounted) {
-            setState(() => isLoading = false);
-          }
-          showMessage('فشل إرسال رمز التحقق', color: errorColor);
-        },
-        codeSent: (String id, int? resendToken) {
-          setState(() {
-            verificationId = id;
-            codeSent = true;
-            isLoading = false;
-          });
+      final email = (userData['email'] ?? '').toString().trim().toLowerCase();
 
-          showMessage('تم إرسال رمز التحقق عبر SMS', color: successColor);
-        },
-        codeAutoRetrievalTimeout: (String id) {
-          verificationId = id;
-        },
-      );
-    } catch (e) {
-      debugPrint('Send SMS Error: $e');
-      if (mounted) {
-        setState(() => isLoading = false);
-      }
-      showMessage('حدث خطأ أثناء إرسال الرمز', color: errorColor);
-    }
-  }
-
-  Future<void> resetPasswordWithSms() async {
-    if (isLoading) return;
-
-    final inputPhone = phoneController.text.trim();
-    final normalizedPhone = normalizePhoneNumber(inputPhone);
-
-    final code = codeController.text.trim();
-    final newPassword = passwordController.text.trim();
-    final confirmPassword = confirmController.text.trim();
-
-    if (normalizedPhone == null) {
-      showMessage(
-        'رقم الهاتف غير صحيح. يجب أن يبدأ بـ 059 أو 056 أو 050 أو 052 أو 053 أو 054 أو 055 أو 058',
-        color: errorColor,
-      );
-      return;
-    }
-
-    if (verificationId == null) {
-      showMessage('أرسلي رمز التحقق أولًا', color: errorColor);
-      return;
-    }
-
-    if (code.isEmpty) {
-      showMessage('أدخلي رمز التحقق', color: errorColor);
-      return;
-    }
-
-    if (newPassword.length < 6) {
-      showMessage('كلمة المرور يجب أن تكون 6 أحرف على الأقل', color: errorColor);
-      return;
-    }
-
-    if (newPassword != confirmPassword) {
-      showMessage('كلمتا المرور غير متطابقتين', color: errorColor);
-      return;
-    }
-
-    setState(() => isLoading = true);
-
-    try {
-      final credential = PhoneAuthProvider.credential(
-        verificationId: verificationId!,
-        smsCode: code,
-      );
-
-      await FirebaseAuth.instance.signInWithCredential(credential);
-
-      final user = FirebaseAuth.instance.currentUser;
-
-      if (user == null) {
-        showMessage('فشل التحقق من المستخدم', color: errorColor);
-        setState(() => isLoading = false);
+      if (email.isEmpty) {
+        showMessage(
+          'هذا الحساب لا يحتوي على بريد إلكتروني لإعادة تعيين كلمة المرور',
+          color: errorColor,
+        );
         return;
       }
 
-      await user.updatePassword(newPassword);
-
-      final uid = await findUidByPhone(normalizedPhone);
-
-      if (uid != null) {
-        await FirebaseFirestore.instance.collection('users').doc(uid).update({
-          'passwordUpdatedAt': FieldValue.serverTimestamp(),
-          'updatedAt': FieldValue.serverTimestamp(),
-        });
+      if (email.endsWith('@test.com')) {
+        showMessage(
+          'هذا الحساب مربوط ببريد تجريبي. يرجى تحديث البريد الإلكتروني الحقيقي أولًا',
+          color: warningColor,
+        );
+        return;
       }
 
-      await FirebaseAuth.instance.signOut();
-
-      showMessage('تم تغيير كلمة المرور بنجاح', color: successColor);
+      await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
 
       if (!mounted) return;
-      Navigator.pop(context);
+
+      await showMessage(
+        'تم إرسال رابط إعادة تعيين كلمة المرور إلى: $email\nتحققي من البريد الوارد أو الرسائل غير المرغوب فيها Spam.',
+        color: successColor,
+      );
     } on FirebaseAuthException catch (e) {
-      debugPrint('Reset Password Error: ${e.code}');
-      showMessage('رمز التحقق غير صحيح أو انتهت صلاحيته', color: errorColor);
+      debugPrint('Password Reset Error: ${e.code}');
+
+      switch (e.code) {
+        case 'user-not-found':
+          showMessage(
+            'لا يوجد حساب في Authentication بهذا البريد',
+            color: errorColor,
+          );
+          break;
+        case 'invalid-email':
+          showMessage('البريد الإلكتروني غير صحيح', color: errorColor);
+          break;
+        case 'network-request-failed':
+          showMessage('تحققي من اتصال الإنترنت', color: errorColor);
+          break;
+        case 'too-many-requests':
+          showMessage(
+            'تم إرسال روابط كثيرة. انتظري قليلًا ثم جربي مرة أخرى',
+            color: warningColor,
+          );
+          break;
+        default:
+          showMessage('تعذر إرسال رابط إعادة التعيين', color: errorColor);
+      }
     } catch (e) {
-      debugPrint('Reset Password General Error: $e');
-      showMessage('حدث خطأ أثناء تغيير كلمة المرور', color: errorColor);
+      debugPrint('Password Reset General Error: $e');
+      showMessage('حدث خطأ أثناء إرسال الرابط', color: errorColor);
     } finally {
       if (mounted) setState(() => isLoading = false);
     }
@@ -272,7 +260,6 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   InputDecoration inputDecoration({
     required String hint,
     required IconData icon,
-    Widget? suffixIcon,
   }) {
     return InputDecoration(
       hintText: hint,
@@ -282,7 +269,6 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
         color: secondaryTextColor,
       ),
       prefixIcon: Icon(icon, color: primaryColor),
-      suffixIcon: suffixIcon,
       filled: true,
       fillColor: cardColor,
       contentPadding: const EdgeInsets.symmetric(horizontal: 16),
@@ -298,25 +284,18 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     required String hint,
     required IconData icon,
     TextInputType keyboardType = TextInputType.text,
-    bool obscureText = false,
-    Widget? suffixIcon,
   }) {
     return SizedBox(
       height: 56,
       child: TextField(
         controller: controller,
         keyboardType: keyboardType,
-        obscureText: obscureText,
         style: const TextStyle(
           fontSize: 18,
           fontFamily: 'Cairo',
           color: textColor,
         ),
-        decoration: inputDecoration(
-          hint: hint,
-          icon: icon,
-          suffixIcon: suffixIcon,
-        ),
+        decoration: inputDecoration(hint: hint, icon: icon),
       ),
     );
   }
@@ -356,7 +335,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                 child: const Column(
                   children: [
                     Icon(
-                      Icons.lock_reset,
+                      Icons.mark_email_read_rounded,
                       size: 72,
                       color: primaryColor,
                     ),
@@ -373,7 +352,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                     ),
                     SizedBox(height: 16),
                     Text(
-                      'أدخلي رقم الهاتف المسجل، ثم أدخلي رمز SMS وكلمة المرور الجديدة.',
+                      'أدخلي رقم الهاتف المسجل، وسنرسل رابط إعادة تعيين كلمة المرور إلى البريد الإلكتروني المرتبط بحسابك.',
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         fontSize: 18,
@@ -393,58 +372,40 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                 keyboardType: TextInputType.phone,
               ),
               const SizedBox(height: 16),
-              if (codeSent) ...[
-                field(
-                  controller: codeController,
-                  hint: 'رمز التحقق SMS',
-                  icon: Icons.sms,
-                  keyboardType: TextInputType.number,
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEAF2FA),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: const Color(0xFFD7E6F5)),
                 ),
-                const SizedBox(height: 16),
-                field(
-                  controller: passwordController,
-                  hint: 'كلمة المرور الجديدة',
-                  icon: Icons.lock,
-                  obscureText: !showPassword,
-                  suffixIcon: IconButton(
-                    onPressed: () {
-                      setState(() => showPassword = !showPassword);
-                    },
-                    icon: Icon(
-                      showPassword ? Icons.visibility : Icons.visibility_off,
-                      color: secondaryTextColor,
+                child: const Row(
+                  children: [
+                    Icon(Icons.info_outline, color: primaryColor),
+                    SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'بعد الإرسال، افتحي البريد الوارد أو Spam واضغطي آخر رابط وصلك فقط.',
+                        textAlign: TextAlign.right,
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontFamily: 'Cairo',
+                          color: textColor,
+                          height: 1.5,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
                     ),
-                  ),
+                  ],
                 ),
-                const SizedBox(height: 16),
-                field(
-                  controller: confirmController,
-                  hint: 'تأكيد كلمة المرور',
-                  icon: Icons.lock_outline,
-                  obscureText: !showConfirmPassword,
-                  suffixIcon: IconButton(
-                    onPressed: () {
-                      setState(() => showConfirmPassword = !showConfirmPassword);
-                    },
-                    icon: Icon(
-                      showConfirmPassword
-                          ? Icons.visibility
-                          : Icons.visibility_off,
-                      color: secondaryTextColor,
-                    ),
-                  ),
-                ),
-              ],
+              ),
               const SizedBox(height: 24),
               SizedBox(
                 width: double.infinity,
                 height: 56,
                 child: ElevatedButton.icon(
-                  onPressed: isLoading
-                      ? null
-                      : codeSent
-                          ? resetPasswordWithSms
-                          : sendSmsCode,
+                  onPressed: isLoading ? null : sendPasswordResetLink,
                   icon: isLoading
                       ? const SizedBox(
                           width: 22,
@@ -454,16 +415,11 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                             color: Colors.white,
                           ),
                         )
-                      : Icon(
-                          codeSent ? Icons.check_circle : Icons.sms,
-                          color: Colors.white,
-                        ),
+                      : const Icon(Icons.email_rounded, color: Colors.white),
                   label: Text(
                     isLoading
-                        ? 'جاري المعالجة'
-                        : codeSent
-                            ? 'تغيير كلمة المرور'
-                            : 'إرسال رمز SMS',
+                        ? 'جاري إرسال الرابط'
+                        : 'إرسال رابط إعادة التعيين',
                     style: const TextStyle(
                       fontSize: 18,
                       fontFamily: 'Cairo',
@@ -480,30 +436,32 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                 ),
               ),
               const SizedBox(height: 16),
-              if (codeSent)
-                SizedBox(
-                  width: double.infinity,
-                  height: 56,
-                  child: OutlinedButton.icon(
-                    onPressed: isLoading ? null : sendSmsCode,
-                    icon: const Icon(Icons.refresh, color: primaryColor),
-                    label: const Text(
-                      'إعادة إرسال الرمز',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontFamily: 'Cairo',
-                        fontWeight: FontWeight.bold,
-                        color: primaryColor,
-                      ),
+              SizedBox(
+                width: double.infinity,
+                height: 56,
+                child: OutlinedButton.icon(
+                  onPressed: isLoading ? null : () => Navigator.pop(context),
+                  icon: const Icon(
+                    Icons.arrow_back_rounded,
+                    color: primaryColor,
+                  ),
+                  label: const Text(
+                    'العودة لتسجيل الدخول',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontFamily: 'Cairo',
+                      fontWeight: FontWeight.bold,
+                      color: primaryColor,
                     ),
-                    style: OutlinedButton.styleFrom(
-                      side: const BorderSide(color: primaryColor, width: 1.5),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                      ),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: primaryColor, width: 1.5),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
                     ),
                   ),
                 ),
+              ),
             ],
           ),
         ),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter_tts/flutter_tts.dart';
 
 class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({super.key});
@@ -14,6 +15,35 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   static const Color warningColor = Color(0xFFED6C02);
   static const Color dangerColor = Color(0xFFD32F2F);
   static const Color backgroundColor = Color(0xFFF7F8FA);
+
+  final FlutterTts _tts = FlutterTts();
+
+  @override
+  void initState() {
+    super.initState();
+    _setupTts();
+  }
+
+  Future<void> _setupTts() async {
+    await _tts.setLanguage('ar');
+    await _tts.setSpeechRate(0.45);
+    await _tts.setPitch(1.0);
+  }
+
+  @override
+  void dispose() {
+    _tts.stop();
+    super.dispose();
+  }
+
+  Future<void> speakNotification({
+    required String title,
+    required String message,
+    required String typeLabel,
+  }) async {
+    await _tts.stop();
+    await _tts.speak('$typeLabel. $title. $message');
+  }
 
   Future<List<QueryDocumentSnapshot<Map<String, dynamic>>>>
   loadMyNotifications() async {
@@ -219,6 +249,11 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                       type: type,
                       icon: getIcon(type),
                       color: getColor(type),
+                      onSpeak: () => speakNotification(
+                        title: (data['title'] ?? 'تنبيه').toString(),
+                        message: (data['message'] ?? '').toString(),
+                        typeLabel: getTypeLabel(type),
+                      ),
                     ),
                   );
                 },
@@ -240,6 +275,7 @@ class NotificationCard extends StatelessWidget {
   final String type;
   final IconData icon;
   final Color color;
+  final VoidCallback? onSpeak;
 
   const NotificationCard({
     super.key,
@@ -251,6 +287,7 @@ class NotificationCard extends StatelessWidget {
     required this.type,
     required this.icon,
     required this.color,
+    this.onSpeak,
   });
 
   @override
@@ -281,7 +318,13 @@ class NotificationCard extends StatelessWidget {
             ),
             child: Icon(icon, color: color, size: 32),
           ),
-          const SizedBox(width: 16),
+          const SizedBox(width: 10),
+          IconButton(
+            tooltip: 'قراءة التنبيه صوتياً',
+            onPressed: onSpeak,
+            icon: Icon(Icons.volume_up_rounded, color: color, size: 30),
+          ),
+          const SizedBox(width: 6),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,

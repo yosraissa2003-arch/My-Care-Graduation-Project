@@ -27,6 +27,8 @@ class _SignUpStep1State extends State<SignUpStep1> {
 
   final TextEditingController phoneController = TextEditingController();
 
+  final TextEditingController emailController = TextEditingController();
+
   final TextEditingController passwordController = TextEditingController();
 
   final TextEditingController confirmPasswordController =
@@ -64,6 +66,7 @@ class _SignUpStep1State extends State<SignUpStep1> {
   void dispose() {
     fullNameController.dispose();
     phoneController.dispose();
+    emailController.dispose();
     passwordController.dispose();
     confirmPasswordController.dispose();
     ageController.dispose();
@@ -85,6 +88,19 @@ class _SignUpStep1State extends State<SignUpStep1> {
 
     if (phoneController.text.trim().isEmpty) {
       showMessage("رقم الهاتف مطلوب", color: errorColor);
+      return;
+    }
+
+    final email = emailController.text.trim().toLowerCase();
+    final emailRegex = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
+
+    if (email.isEmpty) {
+      showMessage("البريد الإلكتروني مطلوب", color: errorColor);
+      return;
+    }
+
+    if (!emailRegex.hasMatch(email)) {
+      showMessage("البريد الإلكتروني غير صحيح", color: errorColor);
       return;
     }
 
@@ -136,6 +152,7 @@ class _SignUpStep1State extends State<SignUpStep1> {
           role: role!,
           fullName: fullNameController.text.trim(),
           phone: phoneController.text.trim(),
+          email: emailController.text.trim().toLowerCase(),
           password: passwordController.text.trim(),
 
           age: role == "مريض" ? ageController.text.trim() : "",
@@ -399,6 +416,15 @@ class _SignUpStep1State extends State<SignUpStep1> {
                   hint: 'رقم الهاتف',
                   icon: Icons.phone,
                   keyboardType: TextInputType.phone,
+                ),
+
+                const SizedBox(height: 16),
+
+                buildField(
+                  controller: emailController,
+                  hint: 'البريد الإلكتروني الحقيقي',
+                  icon: Icons.email,
+                  keyboardType: TextInputType.emailAddress,
                 ),
 
                 const SizedBox(height: 16),

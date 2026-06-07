@@ -20,11 +20,16 @@ dependencies:
 
   firebase_messaging: ^16.0.0
   flutter_local_notifications: ^19.4.0
+  timezone: ^0.10.1
 
   image_picker: ^1.2.1
 
   url_launcher: ^6.3.1
   geolocator: ^13.0.2
+
+  speech_to_text: ^7.0.0
+  flutter_tts: ^4.2.2
+  permission_handler: ^11.3.1
 
 dev_dependencies:
   flutter_test:
@@ -39,3 +44,4 @@ flutter:
     - assets/C.png
     - assets/heart.png
     - assets/logo.png
+

@@ -70,10 +70,6 @@ class MedicalInfoScreen extends StatelessWidget {
             final data = currentUserData ?? user;
             final healthProfile = _getHealthProfile(data);
 
-            final doctorName = _safe(
-              data['doctorName'] ?? data['doctorFullName'],
-              fallback: 'غير محدد',
-            );
             final doctorPhone = _safe(
               data['doctorPhone'],
               fallback: 'غير محدد',
@@ -136,20 +132,13 @@ class MedicalInfoScreen extends StatelessWidget {
                 children: [
                   _headerCard(fullName: fullName, age: age, gender: gender),
                   const SizedBox(height: 16),
-                  _sectionTitle('بيانات التواصل والطبيب'),
+                  _sectionTitle('بيانات التواصل'),
                   const SizedBox(height: 10),
                   _infoTile(
                     title: 'رقم الهاتف',
                     value: phone,
                     icon: Icons.phone_outlined,
                     color: softBlue,
-                  ),
-                  const SizedBox(height: 12),
-                  _infoTile(
-                    title: 'الطبيب المعالج',
-                    value: doctorName,
-                    icon: Icons.medical_services_outlined,
-                    color: softGreen,
                   ),
                   const SizedBox(height: 12),
                   _infoTile(

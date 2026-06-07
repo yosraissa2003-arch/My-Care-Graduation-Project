@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:flutter_tts/flutter_tts.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:speech_to_text/speech_to_text.dart' as stt;
 
 import 'medical_info_screen.dart';
 import 'add_health_data_screen.dart';
@@ -11,9 +14,14 @@ import 'package:mycare/screens/medication_list_screen.dart';
 
 import 'profile_settings_screen.dart';
 
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
   static const Color primaryColor = Color(0xFF1E3A5F);
   static const Color backgroundColor = Color(0xFFF7F8FA);
   static const Color cardColor = Color(0xFFFFFFFF);
@@ -28,6 +36,73 @@ class HomeScreen extends StatelessWidget {
   static const Color softPurple = Color(0xffF7F3FF);
   static const Color softBlue = Color(0xffF1F8FC);
   static const Color borderColor = Color(0xffE6E6E6);
+
+  late final stt.SpeechToText _speech = stt.SpeechToText();
+  late final FlutterTts _tts = FlutterTts();
+
+  bool _isListening = false;
+  String _lastVoiceText = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _setupVoice();
+  }
+
+  @override
+  void dispose() {
+    _speech.stop();
+    _tts.stop();
+    super.dispose();
+  }
+
+  Future<void> _setupVoice() async {
+    try {
+      await _tts.setLanguage('ar');
+      await _tts.setSpeechRate(0.45);
+      await _tts.setPitch(1.0);
+    } catch (_) {}
+  }
+
+  Future<void> _speak(String message) async {
+    try {
+      await _tts.stop();
+      await _tts.speak(message);
+    } catch (_) {}
+  }
+
+  Future<String?> _bestArabicLocale() async {
+    try {
+      final locales = await _speech.locales();
+      final preferred = [
+        'ar_PS',
+        'ar-PS',
+        'ar_IL',
+        'ar-IL',
+        'ar_SA',
+        'ar-SA',
+        'ar_EG',
+        'ar-EG',
+        'ar',
+      ];
+
+      for (final code in preferred) {
+        for (final locale in locales) {
+          if (locale.localeId.toLowerCase() == code.toLowerCase()) {
+            return locale.localeId;
+          }
+        }
+      }
+
+      for (final locale in locales) {
+        if (locale.localeId.toLowerCase().startsWith('ar')) {
+          return locale.localeId;
+        }
+      }
+    } catch (_) {}
+
+    return null;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -104,6 +179,10 @@ class HomeScreen extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             _header(name: name),
+
+            const SizedBox(height: 16),
+
+            _voiceAssistantCard(context, uid, user),
 
             const SizedBox(height: 24),
 
@@ -305,6 +384,497 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
+  Widget _voiceAssistantCard(
+    BuildContext context,
+    String uid,
+    Map<String, dynamic> user,
+  ) {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: const Color(0xffEAF3FF),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: const Color(0xffCFE1F7), width: 1.4),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              CircleAvatar(
+                radius: 27,
+                backgroundColor: Colors.white,
+                child: Icon(
+                  _isListening ? Icons.hearing_rounded : Icons.mic_rounded,
+                  color: primaryColor,
+                  size: 31,
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Text(
+                  _isListening ? 'أنا أسمعك الآن...' : 'المساعد الصوتي',
+                  textAlign: TextAlign.right,
+                  style: const TextStyle(
+                    fontSize: 23,
+                    fontFamily: 'Cairo',
+                    color: textColor,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          const Text(
+            'اضغط على المايك واحكي: افتح صحتي، روح على تقاريري، افتح أدويتي، افتح التنبيهات، اقرأ حالتي، أو ساعدني.',
+            textAlign: TextAlign.right,
+            style: TextStyle(
+              fontSize: 17,
+              fontFamily: 'Cairo',
+              color: secondaryTextColor,
+              height: 1.5,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 14),
+          ElevatedButton.icon(
+            onPressed: _isListening
+                ? null
+                : () => _startHomeVoiceCommand(context, uid, user),
+            icon: Icon(
+              _isListening ? Icons.hearing_rounded : Icons.mic_rounded,
+              color: Colors.white,
+              size: 30,
+            ),
+            label: Text(
+              _isListening ? 'استمع للأمر...' : 'اضغط واحكي الأمر',
+              style: const TextStyle(
+                fontSize: 20,
+                fontFamily: 'Cairo',
+                fontWeight: FontWeight.w900,
+                color: Colors.white,
+              ),
+            ),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: primaryColor,
+              minimumSize: const Size(double.infinity, 58),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(18),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _startHomeVoiceCommand(
+    BuildContext context,
+    String uid,
+    Map<String, dynamic> user,
+  ) async {
+    final micStatus = await Permission.microphone.request();
+
+    if (!micStatus.isGranted) {
+      await _speak('يجب السماح باستخدام المايك حتى يعمل المساعد الصوتي');
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'يجب السماح بصلاحية المايك',
+              textAlign: TextAlign.right,
+              style: TextStyle(fontFamily: 'Cairo'),
+            ),
+          ),
+        );
+      }
+      return;
+    }
+
+    final available = await _speech.initialize(
+      onError: (error) => debugPrint('Speech error: $error'),
+      onStatus: (status) => debugPrint('Speech status: $status'),
+    );
+
+    if (!available) {
+      await _speak('التعرف على الصوت غير متاح على هذا الجهاز');
+      return;
+    }
+
+    _lastVoiceText = '';
+    final localeId = await _bestArabicLocale();
+
+    if (mounted) {
+      setState(() {
+        _isListening = true;
+      });
+    }
+
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          duration: Duration(seconds: 3),
+          content: Text(
+            'أنا أسمع الآن... احكي: افتح صحتي أو روح على تقاريري أو افتح أدويتي',
+            textAlign: TextAlign.right,
+            style: TextStyle(fontFamily: 'Cairo'),
+          ),
+        ),
+      );
+    }
+
+    await _tts.stop();
+    await Future.delayed(const Duration(milliseconds: 300));
+
+    await _speech.listen(
+      localeId: localeId,
+      listenFor: const Duration(seconds: 12),
+      pauseFor: const Duration(seconds: 4),
+      partialResults: true,
+      onResult: (result) {
+        _lastVoiceText = result.recognizedWords;
+        debugPrint('Home voice heard: $_lastVoiceText');
+      },
+    );
+
+    await Future.delayed(const Duration(seconds: 12));
+    await _speech.stop();
+
+    if (mounted) {
+      setState(() {
+        _isListening = false;
+      });
+    }
+
+    if (!context.mounted) return;
+
+    final command = _lastVoiceText.trim();
+
+    if (command.isEmpty) {
+      await _speak('لم أسمع الأمر، حاولي مرة أخرى');
+      return;
+    }
+
+    await _handleHomeVoiceCommand(context, uid, user, command);
+  }
+
+  Future<void> _handleHomeVoiceCommand(
+    BuildContext context,
+    String uid,
+    Map<String, dynamic> user,
+    String command,
+  ) async {
+    final text = _normalizeArabic(command);
+
+    if (_containsAny(text, [
+      'ادويتي',
+      'ادويه',
+      'الادويه',
+      'الادوية',
+      'دوائي',
+      'دواء',
+    ])) {
+      await _speak('سأفتح صفحة أدويتي');
+      if (!context.mounted) return;
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const MedicationListScreen()),
+      );
+      return;
+    }
+
+    if (_containsAny(text, [
+      'صحتي',
+      'قراءه',
+      'قراءة',
+      'سجل قراءه',
+      'سجل قراءة',
+      'قياس',
+    ])) {
+      await _speak('سأفتح صفحة إضافة قراءة صحية');
+      if (!context.mounted) return;
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const AddHealthDataScreen()),
+      );
+      return;
+    }
+
+    if (_containsAny(text, ['تقريري', 'تقاريري', 'التقارير', 'تقرير'])) {
+      await _speak('سأفتح صفحة التقارير الصحية');
+      if (!context.mounted) return;
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => HealthHistoryReportsScreen()),
+      );
+      return;
+    }
+
+    if (_containsAny(text, ['تنبيهات', 'التنبيهات', 'اشعارات', 'الاشعارات'])) {
+      await _speak('سأفتح صفحة التنبيهات');
+      if (!context.mounted) return;
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const NotificationsScreen()),
+      );
+      return;
+    }
+
+    if (_containsAny(text, [
+      'معلومات',
+      'المعلومات الطبيه',
+      'المعلومات الطبية',
+      'ملفي',
+      'الملف الطبي',
+    ])) {
+      await _speak('سأفتح المعلومات الطبية');
+      if (!context.mounted) return;
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => MedicalInfoScreen(user: user)),
+      );
+      return;
+    }
+
+    if (_containsAny(text, [
+      'اقرا حالتي',
+      'اقرأ حالتي',
+      'الحاله الصحيه',
+      'الحالة الصحية',
+      'حالتي',
+    ])) {
+      await _speakLatestHealthStatus(uid);
+      return;
+    }
+
+    if (_containsAny(text, ['ساعدني', 'طوارئ', 'اس او اس', 'sos'])) {
+      await _confirmAndSendSos(context, uid, user);
+      return;
+    }
+
+    await _speak(
+      'لم أفهم الأمر. يمكنك قول افتح صحتي أو روح على تقاريري أو افتح أدويتي',
+    );
+  }
+
+  Future<void> _speakLatestHealthStatus(String uid) async {
+    try {
+      final snapshot = await FirebaseFirestore.instance
+          .collection('healthLogs')
+          .where('userId', isEqualTo: uid)
+          .get();
+
+      final docs = [...snapshot.docs];
+
+      if (docs.isEmpty) {
+        await _speak('لا توجد قراءات صحية بعد');
+        return;
+      }
+
+      docs.sort((a, b) {
+        final aTime = a.data()['createdAt'];
+        final bTime = b.data()['createdAt'];
+        if (aTime is Timestamp && bTime is Timestamp) {
+          return bTime.compareTo(aTime);
+        }
+        return 0;
+      });
+
+      final health = docs.first.data();
+
+      final heartRate = _toInt(health['heartRate']);
+      final systolic = _toInt(health['bloodPressureSystolic']);
+      final diastolic = _toInt(health['bloodPressureDiastolic']);
+      final glucose = _toInt(health['glucose'] ?? health['sugar']);
+      final oxygen = _toInt(health['oxygen']);
+      final temperature = (health['temperature'] ?? 'غير مسجلة').toString();
+
+      final status = getHealthStatus(
+        heartRate: heartRate,
+        systolic: systolic,
+        diastolic: diastolic,
+        glucose: glucose,
+      );
+
+      await _speak(
+        'الحالة الصحية $status. النبض $heartRate. الضغط $systolic على $diastolic. السكر $glucose. الأكسجين $oxygen. الحرارة $temperature.',
+      );
+    } catch (_) {
+      await _speak('تعذر قراءة الحالة الصحية الآن');
+    }
+  }
+
+  Future<void> _confirmAndSendSos(
+    BuildContext context,
+    String uid,
+    Map<String, dynamic> user,
+  ) async {
+    await _speak('هل تريدين إرسال تنبيه طوارئ للمرافق؟');
+
+    if (!context.mounted) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return Directionality(
+          textDirection: TextDirection.rtl,
+          child: AlertDialog(
+            title: const Text(
+              'تأكيد الطوارئ',
+              style: TextStyle(
+                fontFamily: 'Cairo',
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            content: const Text(
+              'هل تريدين إرسال تنبيه SOS للمرافق الآن؟',
+              style: TextStyle(fontFamily: 'Cairo', fontSize: 18),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext, false),
+                child: const Text(
+                  'إلغاء',
+                  style: TextStyle(fontFamily: 'Cairo'),
+                ),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(dialogContext, true),
+                style: ElevatedButton.styleFrom(backgroundColor: errorColor),
+                child: const Text(
+                  'إرسال SOS',
+                  style: TextStyle(fontFamily: 'Cairo', color: Colors.white),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+
+    if (confirmed == true) {
+      await _sendSosAlert(context, uid, user);
+    } else {
+      await _speak('تم إلغاء تنبيه الطوارئ');
+    }
+  }
+
+  Future<void> _sendSosAlert(
+    BuildContext context,
+    String uid,
+    Map<String, dynamic> user,
+  ) async {
+    final patientName = (user['fullName'] ?? user['name'] ?? 'المريض')
+        .toString();
+    final emergencyPhone = (user['emergencyContact'] ?? '').toString();
+
+    String caregiverId = '';
+    final linkedCaregiverPhone =
+        (user['linkedPhone'] ??
+                user['linkedPatientPhone'] ??
+                user['linkedPhoneNumber'] ??
+                '')
+            .toString();
+
+    final possibleCaregiverPhones = <String>{
+      if (linkedCaregiverPhone.trim().isNotEmpty) linkedCaregiverPhone.trim(),
+      if (emergencyPhone.trim().isNotEmpty) emergencyPhone.trim(),
+    };
+
+    for (final phone in possibleCaregiverPhones) {
+      final caregiverQuery = await FirebaseFirestore.instance
+          .collection('users')
+          .where('phone', isEqualTo: phone)
+          .where('role', whereIn: ['مرافق', 'معتني'])
+          .limit(1)
+          .get();
+
+      if (caregiverQuery.docs.isNotEmpty) {
+        caregiverId = caregiverQuery.docs.first.id;
+        break;
+      }
+    }
+
+    final position = await _getCurrentPosition(context);
+    final hasLocation = position != null;
+
+    await FirebaseFirestore.instance.collection('sosAlerts').add({
+      'userId': uid,
+      'patientId': uid,
+      'caregiverId': caregiverId,
+      'linkedCaregiverPhone': linkedCaregiverPhone,
+      'patientName': patientName,
+      'patientPhone': user['phone'] ?? '',
+      'emergencyPhone': emergencyPhone,
+      'source': 'voice',
+      'status': 'active',
+      'message': 'المريض $patientName يحتاج مساعدة فورية',
+      'locationAvailable': hasLocation,
+      'latitude': position?.latitude,
+      'longitude': position?.longitude,
+      'location': hasLocation
+          ? {'latitude': position.latitude, 'longitude': position.longitude}
+          : null,
+      'createdAt': Timestamp.now(),
+    });
+
+    await FirebaseFirestore.instance.collection('notifications').add({
+      'userId': uid,
+      'patientId': uid,
+      'caregiverId': caregiverId,
+      'recipientId': caregiverId,
+      'patientName': patientName,
+      'patientPhone': user['phone'] ?? '',
+      'linkedCaregiverPhone': linkedCaregiverPhone,
+      'title': 'تنبيه طوارئ SOS',
+      'message': 'المريض $patientName يحتاج مساعدة فورية',
+      'type': 'sos',
+      'time': 'طوارئ',
+      'isRead': false,
+      'createdAt': Timestamp.now(),
+    });
+
+    await _speak(
+      hasLocation
+          ? 'تم إرسال تنبيه الطوارئ مع الموقع للمرافق'
+          : 'تم إرسال تنبيه الطوارئ بدون موقع',
+    );
+
+    if (!context.mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        backgroundColor: hasLocation ? successColor : errorColor,
+        content: Text(
+          hasLocation
+              ? 'تم إرسال SOS بالصوت مع الموقع للمرافق'
+              : 'تم إرسال SOS بالصوت بدون موقع',
+          textAlign: TextAlign.right,
+          style: const TextStyle(fontSize: 18, fontFamily: 'Cairo'),
+        ),
+      ),
+    );
+  }
+
+  bool _containsAny(String text, List<String> words) {
+    return words.any((word) => text.contains(_normalizeArabic(word)));
+  }
+
+  String _normalizeArabic(String text) {
+    return text
+        .toLowerCase()
+        .replaceAll('أ', 'ا')
+        .replaceAll('إ', 'ا')
+        .replaceAll('آ', 'ا')
+        .replaceAll('ى', 'ي')
+        .replaceAll('ة', 'ه')
+        .replaceAll('ؤ', 'و')
+        .replaceAll('ئ', 'ي')
+        .replaceAll(RegExp(r'[\u064B-\u065F]'), '')
+        .trim();
+  }
+
   Widget _header({required String name}) {
     return Row(
       children: [
@@ -473,22 +1043,11 @@ class HomeScreen extends StatelessWidget {
                 ? ((med['time'] ?? 'عند الحاجة').toString())
                 : times.join('، ');
 
-            final createdAt = med['createdAt'];
-            final createdDate = createdAt is Timestamp
-                ? createdAt.toDate()
-                : null;
-
             return _medCard(
               docId: doc.id,
               name: (med['name'] ?? 'دواء').toString(),
               time: timeText,
-              dateText: createdDate == null
-                  ? 'بدون تاريخ'
-                  : _formatDate(createdDate),
-              createdTimeText: createdDate == null
-                  ? ''
-                  : _formatTime(createdDate),
-              taken: med['isTaken'] == true || med['taken'] == true,
+              taken: _isMedicationTakenToday(med),
               allergyWarning: med['allergyWarning'] == true,
               allergyWarningMessage: (med['allergyWarningMessage'] ?? '')
                   .toString(),
@@ -694,8 +1253,6 @@ class HomeScreen extends StatelessWidget {
     required String docId,
     required String name,
     required String time,
-    required String dateText,
-    required String createdTimeText,
     required bool taken,
     bool allergyWarning = false,
     String allergyWarningMessage = '',
@@ -782,10 +1339,9 @@ class HomeScreen extends StatelessWidget {
                 .snapshots(),
             builder: (context, snapshot) {
               final medication = snapshot.data?.data();
-              final currentTaken =
-                  medication?['isTaken'] == true ||
-                  medication?['taken'] == true ||
-                  taken;
+              final currentTaken = medication == null
+                  ? taken
+                  : _isMedicationTakenToday(medication);
 
               return Align(
                 alignment: Alignment.centerRight,
@@ -801,6 +1357,7 @@ class HomeScreen extends StatelessWidget {
                           'takenAt': !currentTaken
                               ? FieldValue.serverTimestamp()
                               : null,
+                          'lastTakenDateKey': !currentTaken ? _todayKey() : '',
                         });
                   },
                   child: Container(
@@ -850,12 +1407,7 @@ class HomeScreen extends StatelessWidget {
               alignment: WrapAlignment.end,
               spacing: 8,
               runSpacing: 8,
-              children: [
-                _medMiniInfo(Icons.access_time_rounded, time),
-                _medMiniInfo(Icons.calendar_month_rounded, dateText),
-                if (createdTimeText.isNotEmpty)
-                  _medMiniInfo(Icons.update_rounded, createdTimeText),
-              ],
+              children: [_medMiniInfo(Icons.access_time_rounded, time)],
             ),
           ),
         ],
@@ -1211,6 +1763,17 @@ class HomeScreen extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  String _todayKey() {
+    final now = DateTime.now();
+    return '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+  }
+
+  bool _isMedicationTakenToday(Map<String, dynamic> med) {
+    final lastTakenDateKey = (med['lastTakenDateKey'] ?? '').toString();
+    return (med['isTaken'] == true || med['taken'] == true) &&
+        lastTakenDateKey == _todayKey();
   }
 
   int _toInt(dynamic value) {

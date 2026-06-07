@@ -9,6 +9,7 @@ class SignUpStep4 extends StatefulWidget {
   final String fullName;
   final String phone;
   final String password;
+  final String email;
 
   final String age;
   final String gender;
@@ -44,6 +45,7 @@ class SignUpStep4 extends StatefulWidget {
     required this.fullName,
     required this.phone,
     required this.password,
+    required this.email,
     required this.age,
     required this.gender,
     required this.relation,
@@ -200,6 +202,27 @@ class _SignUpStep4State extends State<SignUpStep4> {
         ? ''
         : normalizePhoneNumber(widget.doctorPhone.trim());
 
+    final String accountEmail = widget.email.trim().toLowerCase();
+    final emailRegex = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
+
+    if (accountEmail.isEmpty) {
+      showMessage('البريد الإلكتروني مطلوب', color: errorColor);
+      return;
+    }
+
+    if (!emailRegex.hasMatch(accountEmail)) {
+      showMessage('البريد الإلكتروني غير صحيح', color: errorColor);
+      return;
+    }
+
+    if (accountEmail.endsWith('@test.com')) {
+      showMessage(
+        'استخدمي بريدًا إلكترونيًا حقيقيًا وليس تجريبيًا',
+        color: errorColor,
+      );
+      return;
+    }
+
     if (normalizedPhone == null) {
       showMessage(
         'رقم الهاتف غير صحيح. يجب أن يبدأ بـ 059 أو 056 أو 050 أو 052 أو 053 أو 054 أو 055 أو 058',
@@ -236,11 +259,20 @@ class _SignUpStep4State extends State<SignUpStep4> {
     setState(() => isLoading = true);
 
     try {
-      final generatedEmail = generateEmailFromPhone(normalizedPhone);
+      final existingPhone = await FirebaseFirestore.instance
+          .collection('users')
+          .where('phone', isEqualTo: normalizedPhone)
+          .limit(1)
+          .get();
+
+      if (existingPhone.docs.isNotEmpty) {
+        showMessage('رقم الهاتف مستخدم مسبقًا', color: errorColor);
+        return;
+      }
 
       final userCredential = await FirebaseAuth.instance
           .createUserWithEmailAndPassword(
-            email: generatedEmail,
+            email: accountEmail,
             password: widget.password.trim(),
           );
 
@@ -253,7 +285,7 @@ class _SignUpStep4State extends State<SignUpStep4> {
         'fullName': widget.fullName.trim(),
         'phone': normalizedPhone,
         'originalPhone': widget.phone.trim(),
-        'email': generatedEmail,
+        'email': accountEmail,
         'createdAt': now,
         'linkedPhone': normalizedLinkedPhone ?? '',
         'doctorPhone': normalizedDoctorPhone ?? '',

@@ -6,6 +6,7 @@ class SignUpStep2 extends StatefulWidget {
   final String role;
   final String fullName;
   final String phone;
+  final String email;
   final String password;
   final String age;
   final String gender;
@@ -16,6 +17,7 @@ class SignUpStep2 extends StatefulWidget {
     required this.role,
     required this.fullName,
     required this.phone,
+    required this.email,
     required this.password,
     required this.age,
     required this.gender,
@@ -142,6 +144,7 @@ class _SignUpStep2State extends State<SignUpStep2> {
           role: widget.role,
           fullName: widget.fullName,
           phone: widget.phone,
+          email: widget.email,
           password: widget.password,
           age: widget.age,
           gender: widget.gender,

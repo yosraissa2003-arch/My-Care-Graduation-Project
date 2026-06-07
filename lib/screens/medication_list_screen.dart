@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_tts/flutter_tts.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'add_medication_screen.dart';
 
 class AppColors {
@@ -22,7 +24,129 @@ class MedicationListScreen extends StatefulWidget {
 }
 
 class _MedicationListScreenState extends State<MedicationListScreen> {
+  final FlutterTts _tts = FlutterTts();
   MedicationFilter selectedFilter = MedicationFilter.all;
+
+  @override
+  void initState() {
+    super.initState();
+    _setupTts();
+  }
+
+  @override
+  void dispose() {
+    _tts.stop();
+    super.dispose();
+  }
+
+  Future<void> _setupTts() async {
+    await _tts.setLanguage('ar');
+    await _tts.setSpeechRate(0.45);
+    await _tts.setVolume(1.0);
+    await _tts.setPitch(1.0);
+  }
+
+  Future<void> _speak(String text) async {
+    if (text.trim().isEmpty) return;
+    await _tts.stop();
+    await _tts.speak(text);
+  }
+
+  String _medicationSpeechText(Map<String, dynamic> data) {
+    final String name = (data['name'] ?? 'دواء بدون اسم').toString();
+    final String dose = (data['dose'] ?? '').toString();
+    final String frequency = (data['frequency'] ?? '').toString();
+    final String usagePeriod = (data['usagePeriod'] ?? '').toString();
+    final String duration = (data['duration'] ?? '').toString();
+    final String importance = (data['importance'] ?? '').toString();
+    final String notes = (data['notes'] ?? '').toString();
+    final String timesText = getTimesText(data);
+    final bool isTaken = _isTakenToday(data);
+    final bool allergyWarning = data['allergyWarning'] == true;
+    final String allergyMessage = (data['allergyWarningMessage'] ?? '')
+        .toString();
+
+    return 'دواء $name. '
+        '${dose.isNotEmpty ? 'الجرعة $dose. ' : ''}'
+        'الموعد $timesText. '
+        '${frequency.isNotEmpty ? 'عدد مرات الاستخدام $frequency. ' : ''}'
+        '${usagePeriod.isNotEmpty ? 'طريقة الاستخدام $usagePeriod. ' : ''}'
+        '${duration.isNotEmpty ? 'مدة الاستخدام $duration. ' : ''}'
+        '${importance.isNotEmpty ? 'الأهمية $importance. ' : ''}'
+        'الحالة ${isTaken ? 'تم أخذ الدواء اليوم' : 'لم يتم أخذ الدواء بعد'}. '
+        '${allergyWarning ? 'تنبيه حساسية: ${allergyMessage.isEmpty ? 'هذا الدواء قد لا يناسب المريض.' : allergyMessage} ' : ''}'
+        '${notes.isNotEmpty ? 'ملاحظات: $notes.' : ''}';
+  }
+
+  String _dailyMedicationsSummaryText(
+    List<QueryDocumentSnapshot<Map<String, dynamic>>> todayDocs,
+    int takenCount,
+  ) {
+    final total = todayDocs.length;
+    final pending = total - takenCount;
+
+    if (total == 0) {
+      return 'لا توجد أدوية مسجلة لليوم.';
+    }
+
+    final details = todayDocs
+        .map((doc) {
+          final data = doc.data();
+          final name = (data['name'] ?? 'دواء بدون اسم').toString();
+          final times = getTimesText(data);
+          final status = _isTakenToday(data) ? 'تم أخذه' : 'لم يتم أخذه';
+          return '$name، موعده $times، والحالة $status';
+        })
+        .join('. ');
+
+    return 'ملخص أدوية اليوم. لديك $total أدوية. تم أخذ $takenCount. '
+        'متبقي $pending. $details';
+  }
+
+  Widget buildVoiceSummaryCard(
+    List<QueryDocumentSnapshot<Map<String, dynamic>>> todayDocs,
+    int takenCount,
+  ) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 20),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFEAF2FA),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Row(
+        children: [
+          CircleAvatar(
+            radius: 27,
+            backgroundColor: AppColors.primary,
+            child: IconButton(
+              icon: const Icon(
+                Icons.volume_up_rounded,
+                color: Colors.white,
+                size: 29,
+              ),
+              onPressed: () =>
+                  _speak(_dailyMedicationsSummaryText(todayDocs, takenCount)),
+            ),
+          ),
+          const SizedBox(width: 13),
+          const Expanded(
+            child: Text(
+              'اسمع ملخص أدوية اليوم ومواعيدها وحالة كل دواء.',
+              textAlign: TextAlign.right,
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w900,
+                color: AppColors.primary,
+                height: 1.5,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
   String getFilterText(MedicationFilter filter) {
     switch (filter) {
@@ -54,14 +178,76 @@ class _MedicationListScreenState extends State<MedicationListScreen> {
     }
   }
 
+  String _todayKey() {
+    final now = DateTime.now();
+    return '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+  }
+
+  DateTime? _createdDate(Map<String, dynamic> med) {
+    final createdAt = med['createdAt'];
+    if (createdAt is Timestamp) return createdAt.toDate();
+
+    final createdDateKey = med['createdDateKey']?.toString();
+    if (createdDateKey != null && createdDateKey.trim().isNotEmpty) {
+      return DateTime.tryParse(createdDateKey);
+    }
+
+    return null;
+  }
+
+  int _durationDays(String duration) {
+    switch (duration.trim()) {
+      case '3 أيام':
+        return 3;
+      case 'أسبوع':
+        return 7;
+      case 'أسبوعين':
+        return 14;
+      case 'شهر':
+        return 30;
+      case 'دائم':
+        return 36500;
+      default:
+        return 36500;
+    }
+  }
+
+  bool _shouldShowMedicationToday(Map<String, dynamic> med) {
+    if (med['isActive'] == false) return false;
+
+    final frequency = (med['frequency'] ?? '').toString();
+    final duration = (med['duration'] ?? 'دائم').toString();
+
+    if (frequency == 'عند الحاجة') return true;
+    if (duration == 'دائم') return true;
+
+    final created = _createdDate(med);
+    if (created == null) return true;
+
+    final today = DateTime.now();
+    final startDate = DateTime(created.year, created.month, created.day);
+    final todayDate = DateTime(today.year, today.month, today.day);
+    final usedDays = todayDate.difference(startDate).inDays;
+
+    return usedDays >= 0 && usedDays < _durationDays(duration);
+  }
+
+  bool _isTakenToday(Map<String, dynamic> med) {
+    final lastTakenDateKey = (med['lastTakenDateKey'] ?? '').toString();
+    return (med['isTaken'] == true || med['taken'] == true) &&
+        lastTakenDateKey == _todayKey();
+  }
+
   List<QueryDocumentSnapshot<Map<String, dynamic>>> filterMedications(
     List<QueryDocumentSnapshot<Map<String, dynamic>>> docs,
   ) {
     return docs.where((doc) {
       final data = doc.data();
-      final bool isTaken = data['isTaken'] == true;
+      final bool isTaken = _isTakenToday(data);
       final List times = data['times'] ?? [];
       final String allTimes = times.join(' ');
+
+      if (!_shouldShowMedicationToday(data)) return false;
 
       switch (selectedFilter) {
         case MedicationFilter.all:
@@ -79,8 +265,12 @@ class _MedicationListScreenState extends State<MedicationListScreen> {
   }
 
   Future<void> toggleTaken(String id, bool currentValue) async {
+    final today = _todayKey();
+
     await FirebaseFirestore.instance.collection('medications').doc(id).update({
       'isTaken': !currentValue,
+      'taken': !currentValue,
+      'lastTakenDateKey': !currentValue ? today : '',
       'takenAt': !currentValue ? FieldValue.serverTimestamp() : null,
     });
   }
@@ -108,7 +298,7 @@ class _MedicationListScreenState extends State<MedicationListScreen> {
     final String remainingPills = data['remainingPills'] ?? '';
     final String notes = data['notes'] ?? '';
     final String timesText = getTimesText(data);
-    final bool isTaken = data['isTaken'] == true;
+    final bool isTaken = _isTakenToday(data);
 
     showModalBottomSheet(
       context: context,
@@ -203,6 +393,35 @@ class _MedicationListScreenState extends State<MedicationListScreen> {
                   ),
                   if (notes.isNotEmpty)
                     buildDetailRow(Icons.notes_rounded, 'ملاحظات', notes),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: () => _speak(_medicationSpeechText(data)),
+                      style: OutlinedButton.styleFrom(
+                        side: const BorderSide(
+                          color: AppColors.primary,
+                          width: 1.5,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        padding: const EdgeInsets.symmetric(vertical: 13),
+                      ),
+                      icon: const Icon(
+                        Icons.volume_up_rounded,
+                        color: AppColors.primary,
+                      ),
+                      label: const Text(
+                        'اسمع تفاصيل الدواء',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w900,
+                          color: AppColors.primary,
+                        ),
+                      ),
+                    ),
+                  ),
                   const SizedBox(height: 18),
                 ],
               ),
@@ -339,7 +558,7 @@ class _MedicationListScreenState extends State<MedicationListScreen> {
   Widget buildMedicationCard(String id, Map<String, dynamic> data) {
     final String name = data['name'] ?? 'دواء بدون اسم';
     final String dose = data['dose'] ?? '';
-    final bool isTaken = data['isTaken'] == true;
+    final bool isTaken = _isTakenToday(data);
     final String timesText = getTimesText(data);
 
     return Container(
@@ -500,6 +719,32 @@ class _MedicationListScreenState extends State<MedicationListScreen> {
               ),
             ],
           ),
+          const SizedBox(height: 10),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: () => _speak(_medicationSpeechText(data)),
+              style: OutlinedButton.styleFrom(
+                side: const BorderSide(color: AppColors.primary, width: 1.4),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                padding: const EdgeInsets.symmetric(vertical: 13),
+              ),
+              icon: const Icon(
+                Icons.volume_up_rounded,
+                color: AppColors.primary,
+              ),
+              label: const Text(
+                'اسمع موعد الدواء',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w900,
+                  color: AppColors.primary,
+                ),
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -558,6 +803,19 @@ class _MedicationListScreenState extends State<MedicationListScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final currentUser = FirebaseAuth.instance.currentUser;
+
+    if (currentUser == null) {
+      return const Scaffold(
+        body: Center(
+          child: Text(
+            'يجب تسجيل الدخول أولاً',
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
+          ),
+        ),
+      );
+    }
+
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
@@ -579,7 +837,7 @@ class _MedicationListScreenState extends State<MedicationListScreen> {
           child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
             stream: FirebaseFirestore.instance
                 .collection('medications')
-                .orderBy('createdAt', descending: true)
+                .where('userId', isEqualTo: currentUser.uid)
                 .snapshots(),
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
@@ -602,9 +860,23 @@ class _MedicationListScreenState extends State<MedicationListScreen> {
               }
 
               final docs = snapshot.data?.docs ?? [];
+              docs.sort((a, b) {
+                final aTime = a.data()['createdAt'];
+                final bTime = b.data()['createdAt'];
+
+                if (aTime is Timestamp && bTime is Timestamp) {
+                  return bTime.compareTo(aTime);
+                }
+
+                return 0;
+              });
+
+              final todayDocs = docs
+                  .where((doc) => _shouldShowMedicationToday(doc.data()))
+                  .toList();
               final filteredDocs = filterMedications(docs);
-              final takenCount = docs
-                  .where((doc) => doc.data()['isTaken'] == true)
+              final takenCount = todayDocs
+                  .where((doc) => _isTakenToday(doc.data()))
                   .length;
 
               return Column(
@@ -619,7 +891,9 @@ class _MedicationListScreenState extends State<MedicationListScreen> {
                     ),
                   ),
                   const SizedBox(height: 16),
-                  buildSummaryCard(docs.length, takenCount),
+                  buildSummaryCard(todayDocs.length, takenCount),
+                  const SizedBox(height: 12),
+                  buildVoiceSummaryCard(todayDocs, takenCount),
                   const SizedBox(height: 18),
                   buildFilterChips(),
                   const SizedBox(height: 14),
