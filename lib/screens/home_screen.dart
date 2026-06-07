@@ -13,6 +13,11 @@ import 'package:mycare/screens/notifications_screen.dart';
 import 'package:mycare/screens/medication_list_screen.dart';
 
 import 'profile_settings_screen.dart';
+import 'daily_tasks_screen.dart';
+import 'appointments_screen.dart';
+import 'care_timeline_screen.dart';
+import 'mood_history_screen.dart';
+import '../services/care_timeline_service.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -284,7 +289,195 @@ class _HomeScreenState extends State<HomeScreen> {
 
             const SizedBox(height: 24),
 
+            _smartDailyCareSection(context),
+
+            const SizedBox(height: 24),
+
             _sosButton(context, uid, user),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _smartDailyCareSection(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _sectionTitle('رعاية يومية ذكية'),
+        const SizedBox(height: 16),
+        _moodQuickCard(context),
+        const SizedBox(height: 14),
+        Row(
+          children: [
+            Expanded(
+              child: _smartFeatureCard(
+                title: 'مهام اليوم',
+                subtitle: 'ماء، مشي، سكر، دواء',
+                icon: Icons.task_alt_rounded,
+                color: successColor,
+                bgColor: softGreen,
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const DailyTasksScreen()),
+                  );
+                },
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _smartFeatureCard(
+                title: 'مواعيدي',
+                subtitle: 'تذكير موعد الطبيب',
+                icon: Icons.calendar_month_rounded,
+                color: warningColor,
+                bgColor: softOrange,
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const AppointmentsScreen(),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        _smartFeatureCard(
+          title: 'خط الرعاية اليومي',
+          subtitle: 'كل أحداث اليوم: دواء، قراءة، مزاج، مواعيد',
+          icon: Icons.timeline_rounded,
+          color: primaryColor,
+          bgColor: softBlue,
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const CareTimelineScreen()),
+            );
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _moodQuickCard(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(22),
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const MoodHistoryScreen()),
+        );
+      },
+      child: Container(
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(
+          color: softPurple,
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: const Color(0xffE2DAF3)),
+        ),
+        child: Row(
+          children: [
+            const CircleAvatar(
+              radius: 30,
+              backgroundColor: Colors.white,
+              child: Text('🙂', style: TextStyle(fontSize: 31)),
+            ),
+            const SizedBox(width: 14),
+            const Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'كيف تشعر اليوم؟',
+                    textAlign: TextAlign.right,
+                    style: TextStyle(
+                      fontSize: 22,
+                      fontFamily: 'Cairo',
+                      fontWeight: FontWeight.w900,
+                      color: textColor,
+                    ),
+                  ),
+                  SizedBox(height: 4),
+                  Text(
+                    'جيد، متعب، أو حزين — ويتم حفظها في التقرير',
+                    textAlign: TextAlign.right,
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontFamily: 'Cairo',
+                      fontWeight: FontWeight.w700,
+                      color: secondaryTextColor,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(Icons.arrow_back_ios_new_rounded, color: primaryColor),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _smartFeatureCard({
+    required String title,
+    required String subtitle,
+    required IconData icon,
+    required Color color,
+    required Color bgColor,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(22),
+      onTap: onTap,
+      child: Container(
+        constraints: const BoxConstraints(minHeight: 118),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: bgColor,
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: color.withOpacity(0.18)),
+        ),
+        child: Row(
+          children: [
+            CircleAvatar(
+              radius: 28,
+              backgroundColor: Colors.white,
+              child: Icon(icon, color: color, size: 32),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    textAlign: TextAlign.right,
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontFamily: 'Cairo',
+                      fontWeight: FontWeight.w900,
+                      color: textColor,
+                    ),
+                  ),
+                  const SizedBox(height: 5),
+                  Text(
+                    subtitle,
+                    textAlign: TextAlign.right,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontFamily: 'Cairo',
+                      fontWeight: FontWeight.w700,
+                      color: secondaryTextColor,
+                      height: 1.4,
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ],
         ),
       ),
@@ -650,6 +843,66 @@ class _HomeScreenState extends State<HomeScreen> {
 
     if (_containsAny(text, ['ساعدني', 'طوارئ', 'اس او اس', 'sos'])) {
       await _confirmAndSendSos(context, uid, user);
+      return;
+    }
+
+    if (_containsAny(text, [
+      'مهام',
+      'مهامي',
+      'مهام اليوم',
+      'اشرب ماء',
+      'مهمه',
+      'مهمة',
+    ])) {
+      await _speak('سأفتح صفحة مهام اليوم');
+      if (!context.mounted) return;
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const DailyTasksScreen()),
+      );
+      return;
+    }
+
+    if (_containsAny(text, ['موعد', 'مواعيد', 'مواعيدي', 'طبيب', 'دكتور'])) {
+      await _speak('سأفتح صفحة المواعيد');
+      if (!context.mounted) return;
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const AppointmentsScreen()),
+      );
+      return;
+    }
+
+    if (_containsAny(text, [
+      'تايم لاين',
+      'التايم لاين',
+      'خط الرعايه',
+      'خط الرعاية',
+      'احداث اليوم',
+      'أحداث اليوم',
+    ])) {
+      await _speak('سأفتح خط الرعاية اليومي');
+      if (!context.mounted) return;
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const CareTimelineScreen()),
+      );
+      return;
+    }
+
+    if (_containsAny(text, [
+      'مزاج',
+      'مزاجي',
+      'شعوري',
+      'كيف اشعر',
+      'كيف أشعر',
+    ])) {
+      await _speak('سأفتح صفحة المزاج');
+      if (!context.mounted) return;
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const MoodHistoryScreen()),
+      );
       return;
     }
 
@@ -1168,8 +1421,49 @@ class _HomeScreenState extends State<HomeScreen> {
               );
             },
           ),
+          const SizedBox(height: 12),
+          _caregiverTaskProgress(patientId),
         ],
       ),
+    );
+  }
+
+  Widget _caregiverTaskProgress(String patientId) {
+    final dateKey = CareTimelineService.todayKey();
+
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: FirebaseFirestore.instance
+          .collection('dailyTasks')
+          .where('userId', isEqualTo: patientId)
+          .where('dateKey', isEqualTo: dateKey)
+          .snapshots(),
+      builder: (context, snapshot) {
+        final tasks = snapshot.data?.docs ?? [];
+
+        if (tasks.isEmpty) {
+          return const Text(
+            'مهام اليوم: لم تُجهز بعد',
+            style: TextStyle(
+              fontSize: 16,
+              fontFamily: 'Cairo',
+              color: secondaryTextColor,
+              fontWeight: FontWeight.w700,
+            ),
+          );
+        }
+
+        final done = tasks.where((doc) => doc.data()['isDone'] == true).length;
+
+        return Text(
+          'إنجاز مهام اليوم: $done من ${tasks.length}',
+          style: const TextStyle(
+            fontSize: 16,
+            fontFamily: 'Cairo',
+            color: successColor,
+            fontWeight: FontWeight.w900,
+          ),
+        );
+      },
     );
   }
 

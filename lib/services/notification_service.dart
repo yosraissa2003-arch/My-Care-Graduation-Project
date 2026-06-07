@@ -35,10 +35,20 @@ class NotificationService {
 
   static const AndroidNotificationChannel _healthReadingChannel =
       AndroidNotificationChannel(
-        'mycare_health_reading_channel',
+        'mycare_health_reading_channel_v2',
         'تذكيرات القراءات الصحية',
         description:
             'تنبيهات إدخال قراءات الضغط والسكر والنبض والأكسجين والحرارة',
+        importance: Importance.max,
+        playSound: true,
+        enableVibration: true,
+      );
+
+  static const AndroidNotificationChannel _appointmentChannel =
+      AndroidNotificationChannel(
+        'mycare_appointment_channel',
+        'تذكيرات المواعيد',
+        description: 'تنبيهات مواعيد الطبيب والمراجعات الصحية',
         importance: Importance.max,
         playSound: true,
         enableVibration: true,
@@ -80,6 +90,7 @@ class NotificationService {
     await androidPlugin?.createNotificationChannel(_urgentChannel);
     await androidPlugin?.createNotificationChannel(_medicationChannel);
     await androidPlugin?.createNotificationChannel(_healthReadingChannel);
+    await androidPlugin?.createNotificationChannel(_appointmentChannel);
     await androidPlugin?.requestNotificationsPermission();
 
     _initialized = true;
@@ -273,10 +284,17 @@ class NotificationService {
 
   static Future<void> scheduleHealthReadingReminders({
     int morningHour = 8,
-    int morningMinute = 0,
+    int morningMinute = 30,
     int eveningHour = 20,
-    int eveningMinute = 0,
+    int eveningMinute = 30,
   }) async {
+    // ثابت حسب طلب المشروع: تذكير العلامات الحيوية 8:30 صباحاً و8:30 مساءً.
+    // حتى لو أي شاشة قديمة أرسلت 8:00، نخلي التذكير النهائي 8:30.
+    morningHour = 8;
+    morningMinute = 30;
+    eveningHour = 20;
+    eveningMinute = 30;
+
     await init();
     await _requestExactAlarmPermission();
     await cancelHealthReadingReminders();
@@ -339,7 +357,7 @@ class NotificationService {
     required tz.TZDateTime scheduledDate,
   }) async {
     const androidDetails = AndroidNotificationDetails(
-      'mycare_health_reading_channel',
+      'mycare_health_reading_channel_v2',
       'تذكيرات القراءات الصحية',
       channelDescription:
           'تنبيهات إدخال قراءات الضغط والسكر والنبض والأكسجين والحرارة',
@@ -392,6 +410,96 @@ class NotificationService {
       );
     } catch (e) {
       debugPrint('Health reminder schedule failed: $e');
+    }
+  }
+
+  static Future<void> scheduleAppointmentReminder({
+    required String appointmentId,
+    required String title,
+    required DateTime scheduledDateTime,
+  }) async {
+    await init();
+    await _requestExactAlarmPermission();
+
+    final reminderTime = scheduledDateTime.subtract(const Duration(hours: 1));
+    final now = DateTime.now();
+
+    final effectiveReminder =
+        reminderTime.isAfter(now.add(const Duration(seconds: 20)))
+        ? reminderTime
+        : scheduledDateTime.isAfter(now.add(const Duration(seconds: 20)))
+        ? scheduledDateTime
+        : now.add(const Duration(seconds: 10));
+
+    final scheduledDate = tz.TZDateTime.from(effectiveReminder, tz.local);
+    final notificationId = _notificationIdFor('appointment_$appointmentId', 0);
+
+    await _scheduleOneAppointmentReminder(
+      id: notificationId,
+      title: title,
+      scheduledDate: scheduledDate,
+    );
+
+    final pending = await _plugin.pendingNotificationRequests();
+    debugPrint(
+      'Appointment reminder scheduled: id=$notificationId title=$title date=$scheduledDate. Pending notifications: ${pending.length}',
+    );
+  }
+
+  static Future<void> _scheduleOneAppointmentReminder({
+    required int id,
+    required String title,
+    required tz.TZDateTime scheduledDate,
+  }) async {
+    const androidDetails = AndroidNotificationDetails(
+      'mycare_appointment_channel',
+      'تذكيرات المواعيد',
+      channelDescription: 'تنبيهات مواعيد الطبيب والمراجعات الصحية',
+      importance: Importance.max,
+      priority: Priority.high,
+      playSound: true,
+      enableVibration: true,
+      ticker: 'موعد طبي',
+      category: AndroidNotificationCategory.reminder,
+      visibility: NotificationVisibility.public,
+      icon: '@mipmap/ic_launcher',
+    );
+
+    const iosDetails = DarwinNotificationDetails(
+      presentAlert: true,
+      presentBadge: true,
+      presentSound: true,
+    );
+
+    const details = NotificationDetails(
+      android: androidDetails,
+      iOS: iosDetails,
+    );
+
+    try {
+      await _plugin.zonedSchedule(
+        id,
+        'تذكير موعد طبي',
+        'لديك موعد: $title',
+        scheduledDate,
+        details,
+        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+        payload: 'appointment:$id',
+      );
+    } on PlatformException catch (e) {
+      debugPrint('Exact appointment schedule failed: ${e.code} - ${e.message}');
+
+      await _plugin.zonedSchedule(
+        id,
+        'تذكير موعد طبي',
+        'لديك موعد: $title',
+        scheduledDate,
+        details,
+        androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+        payload: 'appointment:$id',
+      );
+    } catch (e) {
+      debugPrint('Appointment schedule failed: $e');
     }
   }
 

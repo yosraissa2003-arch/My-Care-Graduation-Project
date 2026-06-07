@@ -3,6 +3,7 @@ import 'package:flutter_tts/flutter_tts.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'add_medication_screen.dart';
+import '../services/care_timeline_service.dart';
 
 class AppColors {
   static const Color primary = Color(0xFF1E3A5F);
@@ -266,13 +267,28 @@ class _MedicationListScreenState extends State<MedicationListScreen> {
 
   Future<void> toggleTaken(String id, bool currentValue) async {
     final today = _todayKey();
+    final currentUser = FirebaseAuth.instance.currentUser;
+    final medRef = FirebaseFirestore.instance.collection('medications').doc(id);
+    final medSnapshot = await medRef.get();
+    final medData = medSnapshot.data() ?? <String, dynamic>{};
+    final medicationName = (medData['name'] ?? 'دواء').toString();
 
-    await FirebaseFirestore.instance.collection('medications').doc(id).update({
+    await medRef.update({
       'isTaken': !currentValue,
       'taken': !currentValue,
       'lastTakenDateKey': !currentValue ? today : '',
       'takenAt': !currentValue ? FieldValue.serverTimestamp() : null,
     });
+
+    if (!currentValue && currentUser != null) {
+      await CareTimelineService.addEvent(
+        userId: currentUser.uid,
+        type: 'medication',
+        title: 'تم أخذ دواء',
+        details: medicationName,
+      );
+      await CareTimelineService.updateLastActivity(currentUser.uid);
+    }
   }
 
   void openAddMedicationScreen() {

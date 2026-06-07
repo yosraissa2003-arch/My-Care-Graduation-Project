@@ -101,6 +101,12 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         return Icons.health_and_safety_rounded;
       case 'sos':
         return Icons.sos;
+      case 'appointment':
+        return Icons.calendar_month_rounded;
+      case 'task':
+        return Icons.task_alt_rounded;
+      case 'mood':
+        return Icons.mood_rounded;
       default:
         return Icons.notifications_rounded;
     }
@@ -116,6 +122,12 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         return dangerColor;
       case 'sos':
         return dangerColor;
+      case 'appointment':
+        return primaryColor;
+      case 'task':
+        return primaryColor;
+      case 'mood':
+        return warningColor;
       default:
         return primaryColor;
     }
@@ -131,6 +143,12 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         return 'تحذير حساسية دواء';
       case 'sos':
         return 'تنبيه طوارئ';
+      case 'appointment':
+        return 'تذكير موعد';
+      case 'task':
+        return 'مهمة يومية';
+      case 'mood':
+        return 'مزاج المريض';
       default:
         return 'تنبيه عام';
     }

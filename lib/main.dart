@@ -25,6 +25,16 @@ Future<void> saveFcmTokenForCurrentUser() async {
   }, SetOptions(merge: true));
 }
 
+Future<void> updateCurrentUserAppOpenActivity() async {
+  final user = FirebaseAuth.instance.currentUser;
+  if (user == null) return;
+
+  await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+    'lastAppOpenAt': FieldValue.serverTimestamp(),
+    'lastActivityAt': FieldValue.serverTimestamp(),
+  }, SetOptions(merge: true));
+}
+
 Future<void> rescheduleMedicationRemindersForCurrentUser() async {
   final user = FirebaseAuth.instance.currentUser;
   if (user == null) return;
@@ -72,6 +82,24 @@ Future<void> rescheduleMedicationRemindersForCurrentUser() async {
   }
 }
 
+Future<void> rescheduleHealthReadingRemindersForCurrentUser() async {
+  final user = FirebaseAuth.instance.currentUser;
+  if (user == null) return;
+
+  try {
+    await NotificationService.scheduleHealthReadingReminders(
+      morningHour: 8,
+      morningMinute: 30,
+      eveningHour: 20,
+      eveningMinute: 30,
+    );
+
+    debugPrint('Health reading reminders rescheduled at 08:30 and 20:30');
+  } catch (e) {
+    debugPrint('Reschedule health reading reminders error: $e');
+  }
+}
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -95,7 +123,9 @@ void main() async {
   FirebaseAuth.instance.authStateChanges().listen((user) async {
     if (user != null) {
       await saveFcmTokenForCurrentUser();
+      await updateCurrentUserAppOpenActivity();
       await rescheduleMedicationRemindersForCurrentUser();
+      await rescheduleHealthReadingRemindersForCurrentUser();
     }
   });
 

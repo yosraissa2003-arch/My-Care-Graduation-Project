@@ -6,6 +6,7 @@ import 'package:flutter_tts/flutter_tts.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 import '../services/notification_service.dart';
+import '../services/care_timeline_service.dart';
 
 class AddHealthDataScreen extends StatefulWidget {
   const AddHealthDataScreen({super.key});
@@ -314,7 +315,16 @@ class _AddHealthDataScreenState extends State<AddHealthDataScreen> {
         'lastAiStatus': aiResult['status'],
         'lastAiMessage': aiResult['message'],
         'lastReadingAt': Timestamp.now(),
+        'lastActivityAt': Timestamp.now(),
       }, SetOptions(merge: true));
+
+      await CareTimelineService.addEvent(
+        userId: uid,
+        type: 'health',
+        title: 'تم تسجيل قراءة صحية',
+        details:
+            'النبض $heartRate، الضغط $systolic/$diastolic، السكر $glucose، الأكسجين $oxygen، الحرارة $temperature',
+      );
 
       if (aiResult['status'] == 'Warning' || aiResult['status'] == 'Critical') {
         await FirebaseFirestore.instance.collection('notifications').add({
