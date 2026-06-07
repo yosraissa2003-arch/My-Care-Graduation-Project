@@ -25,7 +25,7 @@ class NotificationService {
 
   static const AndroidNotificationChannel _medicationChannel =
       AndroidNotificationChannel(
-        'mycare_medication_channel',
+        'mycare_medication_channel_v3',
         'تذكيرات الأدوية',
         description: 'تنبيهات مواعيد الأدوية اليومية',
         importance: Importance.max,
@@ -166,15 +166,23 @@ class NotificationService {
     required String medicationName,
     required List<String> selectedTimes,
   }) async {
-    if (selectedTimes.isEmpty) return;
+    if (selectedTimes.isEmpty) {
+      debugPrint('No medication times selected for $medicationName');
+      return;
+    }
 
     await init();
     await _requestExactAlarmPermission();
     await cancelMedicationReminders(medicationId);
 
+    int scheduledCount = 0;
+
     for (int i = 0; i < selectedTimes.length; i++) {
       final scheduledDate = _timeTextToTZDateTime(selectedTimes[i]);
-      if (scheduledDate == null) continue;
+      if (scheduledDate == null) {
+        debugPrint('Could not parse medication time: ${selectedTimes[i]}');
+        continue;
+      }
 
       final notificationId = _notificationIdFor(medicationId, i);
 
@@ -184,8 +192,16 @@ class NotificationService {
         scheduledDate: scheduledDate,
       );
 
-      debugPrint('Medication notification scheduled for: $scheduledDate');
+      scheduledCount++;
+      debugPrint(
+        'Medication notification scheduled: id=$notificationId name=$medicationName time=${selectedTimes[i]} date=$scheduledDate',
+      );
     }
+
+    final pending = await _plugin.pendingNotificationRequests();
+    debugPrint(
+      'Medication reminders scheduled count for $medicationName: $scheduledCount. Pending notifications: ${pending.length}',
+    );
   }
 
   static Future<void> cancelMedicationReminders(String medicationId) async {
@@ -202,7 +218,7 @@ class NotificationService {
     required tz.TZDateTime scheduledDate,
   }) async {
     const androidDetails = AndroidNotificationDetails(
-      'mycare_medication_channel',
+      'mycare_medication_channel_v3',
       'تذكيرات الأدوية',
       channelDescription: 'تنبيهات مواعيد الأدوية اليومية',
       importance: Importance.max,
@@ -398,7 +414,15 @@ class NotificationService {
   }
 
   static tz.TZDateTime? _timeTextToTZDateTime(String timeText) {
-    final text = timeText.trim();
+    final text = timeText
+        .trim()
+        .replaceAll('صباحاً', 'صباح')
+        .replaceAll('صباحًا', 'صباح')
+        .replaceAll('مساءً', 'مساء')
+        .replaceAll('مساءا', 'مساء')
+        .replaceAll('ظهراً', 'ظهر')
+        .replaceAll('ظهرًا', 'ظهر');
+
     final match = RegExp(r'(\d{1,2}):(\d{2})').firstMatch(text);
     if (match == null) return null;
 

@@ -25,6 +25,53 @@ Future<void> saveFcmTokenForCurrentUser() async {
   }, SetOptions(merge: true));
 }
 
+Future<void> rescheduleMedicationRemindersForCurrentUser() async {
+  final user = FirebaseAuth.instance.currentUser;
+  if (user == null) return;
+
+  try {
+    final snapshot = await FirebaseFirestore.instance
+        .collection('medications')
+        .where('userId', isEqualTo: user.uid)
+        .where('isActive', isEqualTo: true)
+        .get();
+
+    int scheduledCount = 0;
+
+    for (final doc in snapshot.docs) {
+      final data = doc.data();
+
+      final medicationName = (data['name'] ?? 'دواء').toString();
+      final rawTimes = data['times'];
+
+      final selectedTimes = rawTimes is List
+          ? rawTimes
+                .map((time) => time.toString())
+                .where((time) => time.trim().isNotEmpty)
+                .toList()
+          : <String>[];
+
+      if (selectedTimes.isEmpty) {
+        continue;
+      }
+
+      await NotificationService.scheduleMedicationReminders(
+        medicationId: doc.id,
+        medicationName: medicationName,
+        selectedTimes: selectedTimes,
+      );
+
+      scheduledCount += selectedTimes.length;
+    }
+
+    debugPrint(
+      'Medication reminders rescheduled for ${snapshot.docs.length} medicines. Scheduled times: $scheduledCount',
+    );
+  } catch (e) {
+    debugPrint('Reschedule medication reminders error: $e');
+  }
+}
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -48,6 +95,7 @@ void main() async {
   FirebaseAuth.instance.authStateChanges().listen((user) async {
     if (user != null) {
       await saveFcmTokenForCurrentUser();
+      await rescheduleMedicationRemindersForCurrentUser();
     }
   });
 
