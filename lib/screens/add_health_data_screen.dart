@@ -7,9 +7,12 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 import '../services/notification_service.dart';
 import '../services/care_timeline_service.dart';
+import '../services/wearable_health_service.dart';
 
 class AddHealthDataScreen extends StatefulWidget {
-  const AddHealthDataScreen({super.key});
+  final bool autoImportFromWatch;
+
+  const AddHealthDataScreen({super.key, this.autoImportFromWatch = false});
 
   @override
   State<AddHealthDataScreen> createState() => _AddHealthDataScreenState();
@@ -25,7 +28,13 @@ class _AddHealthDataScreenState extends State<AddHealthDataScreen> {
 
   bool isLoading = false;
   bool isListening = false;
+  bool isImportingFromWatch = false;
+  bool importedFromWatch = false;
   String lastVoiceText = '';
+  String watchImportMessage = '';
+  WearableReading? lastWearableReading;
+
+  final WearableHealthService _wearableHealthService = WearableHealthService();
 
   late final stt.SpeechToText _speech = stt.SpeechToText();
   late final FlutterTts _tts = FlutterTts();
@@ -39,6 +48,12 @@ class _AddHealthDataScreenState extends State<AddHealthDataScreen> {
   void initState() {
     super.initState();
     _setupVoice();
+
+    if (widget.autoImportFromWatch) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        importLatestReadingFromWatch();
+      });
+    }
   }
 
   Future<void> _setupVoice() async {
@@ -55,6 +70,90 @@ class _AddHealthDataScreenState extends State<AddHealthDataScreen> {
       await _tts.speak(message);
     } catch (_) {}
   }
+
+  Future<void> importLatestReadingFromWatch() async {
+    if (isImportingFromWatch) return;
+
+    setState(() {
+      isImportingFromWatch = true;
+      watchImportMessage = 'جاري الاتصال بالساعة وقراءة آخر البيانات...';
+    });
+
+    try {
+      final result = await _wearableHealthService.fetchLatestReading();
+
+      if (!mounted) return;
+
+      if (!result.success || result.reading == null) {
+        setState(() {
+          watchImportMessage = result.message;
+          importedFromWatch = false;
+          lastWearableReading = null;
+        });
+
+        await _speak('لم أستطع استيراد القراءة من الساعة');
+        _showSnack(result.message, color: Colors.red);
+        return;
+      }
+
+      final reading = result.reading!;
+
+      setState(() {
+        if (reading.heartRate != null) {
+          heartRateController.text = reading.heartRate.toString();
+        }
+
+        if (reading.systolic != null) {
+          systolicController.text = reading.systolic.toString();
+        }
+
+        if (reading.diastolic != null) {
+          diastolicController.text = reading.diastolic.toString();
+        }
+
+        if (reading.glucose != null) {
+          glucoseController.text = reading.glucose.toString();
+        }
+
+        if (reading.oxygen != null) {
+          oxygenController.text = reading.oxygen.toString();
+        }
+
+        if (reading.temperature != null) {
+          temperatureController.text = reading.temperature!.toStringAsFixed(1);
+        }
+
+        importedFromWatch = true;
+        lastWearableReading = reading;
+        watchImportMessage = result.message;
+      });
+
+      await _speak('تم استيراد القراءات المتوفرة من الساعة');
+      _showSnack(result.message, color: green);
+    } finally {
+      if (mounted) {
+        setState(() {
+          isImportingFromWatch = false;
+        });
+      }
+    }
+  }
+
+  void _showSnack(String message, {Color color = dark}) {
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        backgroundColor: color,
+        content: Text(
+          message,
+          textAlign: TextAlign.right,
+          style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
+        ),
+      ),
+    );
+  }
+
 
   Future<String?> _bestArabicLocale() async {
     try {
@@ -305,6 +404,15 @@ class _AddHealthDataScreenState extends State<AddHealthDataScreen> {
         'temperature': temperature,
         'aiStatus': aiResult['status'],
         'aiMessage': aiResult['message'],
+        'source': importedFromWatch ? 'wearable' : 'manual',
+        'isWearableReading': importedFromWatch,
+        if (importedFromWatch && lastWearableReading != null) ...{
+          'wearablePlatform': lastWearableReading!.platform,
+          'wearableSourceName': lastWearableReading!.sourceName,
+          'wearableSyncedAt': lastWearableReading!.syncedAt != null
+              ? Timestamp.fromDate(lastWearableReading!.syncedAt!)
+              : null,
+        },
         'createdAt': Timestamp.now(),
       };
 
@@ -323,7 +431,7 @@ class _AddHealthDataScreenState extends State<AddHealthDataScreen> {
         type: 'health',
         title: 'تم تسجيل قراءة صحية',
         details:
-            'النبض $heartRate، الضغط $systolic/$diastolic، السكر $glucose، الأكسجين $oxygen، الحرارة $temperature',
+            '${importedFromWatch ? 'من الساعة - ' : ''}النبض $heartRate، الضغط $systolic/$diastolic، السكر $glucose، الأكسجين $oxygen، الحرارة $temperature',
       );
 
       if (aiResult['status'] == 'Warning' || aiResult['status'] == 'Critical') {
@@ -461,6 +569,106 @@ class _AddHealthDataScreenState extends State<AddHealthDataScreen> {
         });
       }
     }
+  }
+
+  Widget _watchImportCard() {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: const Color(0xffF1F8FC),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: const Color(0xffD7E6F5), width: 1.4),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: const [
+              CircleAvatar(
+                radius: 28,
+                backgroundColor: Colors.white,
+                child: Icon(
+                  Icons.watch_rounded,
+                  color: dark,
+                  size: 32,
+                ),
+              ),
+              SizedBox(width: 14),
+              Expanded(
+                child: Text(
+                  'استيراد من الساعة الذكية',
+                  textAlign: TextAlign.right,
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.w900,
+                    color: dark,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          const Text(
+            'يعمل مع الساعات التي تزامن قراءاتها مع Apple Health أو Google Health Connect. سيتم تعبئة القراءات المتوفرة فقط، وأي قراءة غير موجودة يمكنك إدخالها يدويًا.',
+            textAlign: TextAlign.right,
+            style: TextStyle(
+              fontSize: 16.5,
+              fontWeight: FontWeight.w700,
+              color: Color(0xff4B5563),
+              height: 1.5,
+            ),
+          ),
+          if (watchImportMessage.trim().isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Text(
+              watchImportMessage,
+              textAlign: TextAlign.right,
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w800,
+                color: dark,
+                height: 1.5,
+              ),
+            ),
+          ],
+          const SizedBox(height: 14),
+          ElevatedButton.icon(
+            onPressed: isImportingFromWatch ? null : importLatestReadingFromWatch,
+            icon: isImportingFromWatch
+                ? const SizedBox(
+                    width: 26,
+                    height: 26,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 3,
+                      color: Colors.white,
+                    ),
+                  )
+                : const Icon(
+                    Icons.sync_rounded,
+                    color: Colors.white,
+                    size: 30,
+                  ),
+            label: Text(
+              isImportingFromWatch
+                  ? 'جاري الاستيراد...'
+                  : 'استيراد آخر قراءة من الساعة',
+              style: const TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w900,
+                color: Colors.white,
+              ),
+            ),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: dark,
+              minimumSize: const Size(double.infinity, 58),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(18),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _voiceHealthInputCard() {
@@ -835,6 +1043,8 @@ class _AddHealthDataScreenState extends State<AddHealthDataScreen> {
               ),
               const SizedBox(height: 18),
               _voiceHealthInputCard(),
+              const SizedBox(height: 18),
+              _watchImportCard(),
               const SizedBox(height: 28),
               _inputField(
                 controller: heartRateController,

@@ -308,6 +308,23 @@ class _HomeScreenState extends State<HomeScreen> {
         const SizedBox(height: 16),
         _moodQuickCard(context),
         const SizedBox(height: 14),
+        _smartFeatureCard(
+          title: 'الساعة الذكية',
+          subtitle: 'استيراد النبض والأكسجين والحرارة من الساعة',
+          icon: Icons.watch_rounded,
+          color: primaryColor,
+          bgColor: softBlue,
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) =>
+                    const AddHealthDataScreen(autoImportFromWatch: true),
+              ),
+            );
+          },
+        ),
+        const SizedBox(height: 14),
         Row(
           children: [
             Expanded(
@@ -773,6 +790,25 @@ class _HomeScreenState extends State<HomeScreen> {
       Navigator.push(
         context,
         MaterialPageRoute(builder: (_) => const MedicationListScreen()),
+      );
+      return;
+    }
+
+    if (_containsAny(text, [
+      'الساعه',
+      'الساعة',
+      'ساعة',
+      'سمارت',
+      'واتش',
+      'watch',
+    ])) {
+      await _speak('سأفتح صفحة استيراد القراءات من الساعة');
+      if (!context.mounted) return;
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => const AddHealthDataScreen(autoImportFromWatch: true),
+        ),
       );
       return;
     }

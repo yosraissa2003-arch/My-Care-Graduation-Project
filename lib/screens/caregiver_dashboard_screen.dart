@@ -368,6 +368,204 @@ class _CaregiverDashboardScreenState extends State<CaregiverDashboardScreen> {
     return 'لا يوجد';
   }
 
+
+  String _todayKey() {
+    final now = DateTime.now();
+    return '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+  }
+
+  Future<Map<String, dynamic>?> getTodayMood() async {
+    if (patientId == null && patientData == null) return null;
+
+    try {
+      final dateKey = _todayKey();
+      final patientPhone = (patientData?['phone'] ?? '').toString();
+      final originalPhone = (patientData?['originalPhone'] ?? '').toString();
+
+      final possibleIds = <String>{
+        if (patientId != null) patientId!,
+        if ((patientData?['uid'] ?? '').toString().isNotEmpty)
+          (patientData?['uid']).toString(),
+        if ((patientData?['userId'] ?? '').toString().isNotEmpty)
+          (patientData?['userId']).toString(),
+        if ((patientData?['patientId'] ?? '').toString().isNotEmpty)
+          (patientData?['patientId']).toString(),
+      };
+
+      final allDocs = <QueryDocumentSnapshot<Map<String, dynamic>>>[];
+
+      Future<void> addMoodQuery(Query<Map<String, dynamic>> query) async {
+        try {
+          final snap = await query.get();
+          allDocs.addAll(snap.docs);
+        } catch (e) {
+          debugPrint('Mood query ignored: $e');
+        }
+      }
+
+      for (final id in possibleIds) {
+        await addMoodQuery(
+          FirebaseFirestore.instance
+              .collection('moodLogs')
+              .where('userId', isEqualTo: id)
+              .where('dateKey', isEqualTo: dateKey),
+        );
+
+        await addMoodQuery(
+          FirebaseFirestore.instance
+              .collection('moodLogs')
+              .where('patientId', isEqualTo: id)
+              .where('dateKey', isEqualTo: dateKey),
+        );
+      }
+
+      for (final phone in {patientPhone, originalPhone}) {
+        if (phone.isEmpty) continue;
+
+        await addMoodQuery(
+          FirebaseFirestore.instance
+              .collection('moodLogs')
+              .where('patientPhone', isEqualTo: phone)
+              .where('dateKey', isEqualTo: dateKey),
+        );
+      }
+
+      final uniqueDocs = <String, QueryDocumentSnapshot<Map<String, dynamic>>>{};
+      for (final doc in allDocs) {
+        uniqueDocs[doc.id] = doc;
+      }
+
+      final docs = uniqueDocs.values.toList();
+
+      if (docs.isEmpty) {
+        final lastMood = patientData?['lastMood'];
+        if (lastMood is Map<String, dynamic> && lastMood.isNotEmpty) {
+          return Map<String, dynamic>.from(lastMood);
+        }
+        return null;
+      }
+
+      docs.sort((a, b) {
+        final aTime = a.data()['createdAt'];
+        final bTime = b.data()['createdAt'];
+
+        if (aTime is Timestamp && bTime is Timestamp) {
+          return bTime.compareTo(aTime);
+        }
+
+        return 0;
+      });
+
+      return docs.first.data();
+    } catch (e) {
+      debugPrint('Today mood load error: $e');
+      return null;
+    }
+  }
+
+  String moodEmoji(Map<String, dynamic>? mood) {
+    if (mood == null) return '😐';
+
+    final emoji = (mood['emoji'] ?? '').toString().trim();
+    if (emoji.isNotEmpty) return emoji;
+
+    final text = '${mood['moodLabel'] ?? mood['label'] ?? mood['mood'] ?? ''}';
+
+    if (text.contains('جيد') || text.contains('سعيد') || text.contains('good')) {
+      return '🙂';
+    }
+    if (text.contains('حزين') || text.contains('sad')) {
+      return '😢';
+    }
+    if (text.contains('متعب') || text.contains('tired')) {
+      return '😐';
+    }
+
+    return '😐';
+  }
+
+  String moodLabel(Map<String, dynamic>? mood) {
+    if (mood == null) return 'لم يسجل المريض مزاجه اليوم';
+
+    final label = (mood['moodLabel'] ?? mood['label'] ?? '').toString().trim();
+    if (label.isNotEmpty) return label;
+
+    final value = (mood['mood'] ?? '').toString().trim().toLowerCase();
+
+    if (value == 'good') return 'جيد';
+    if (value == 'tired') return 'متعب';
+    if (value == 'sad') return 'حزين';
+
+    return value.isEmpty ? 'غير محدد' : value;
+  }
+
+  Widget moodStatusCard() {
+    return FutureBuilder<Map<String, dynamic>?>(
+      future: getTodayMood(),
+      builder: (context, snapshot) {
+        final mood = snapshot.data;
+        final hasMood = mood != null;
+        final label = moodLabel(mood);
+        final emoji = moodEmoji(mood);
+
+        return Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: cardColor,
+            borderRadius: BorderRadius.circular(24),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 62,
+                height: 62,
+                decoration: BoxDecoration(
+                  color: primaryColor.withOpacity(0.10),
+                  shape: BoxShape.circle,
+                ),
+                child: Center(
+                  child: Text(
+                    hasMood ? emoji : '🙂',
+                    style: const TextStyle(fontSize: 34),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'مزاج المريض اليوم',
+                      style: TextStyle(
+                        fontSize: 17,
+                        fontFamily: 'Cairo',
+                        color: secondaryTextColor,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 5),
+                    Text(
+                      hasMood ? '$emoji $label' : label,
+                      textAlign: TextAlign.right,
+                      style: TextStyle(
+                        fontSize: 22,
+                        fontFamily: 'Cairo',
+                        fontWeight: FontWeight.bold,
+                        color: hasMood ? primaryColor : secondaryTextColor,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+
   Color statusColor(String status) {
     if (status == 'حرجة') return dangerColor;
     if (status == 'تحذير') return warningColor;
@@ -816,6 +1014,10 @@ class _CaregiverDashboardScreenState extends State<CaregiverDashboardScreen> {
                     const SizedBox(height: 18),
                     sectionTitle('الحالة الصحية'),
                     healthStatusCard(),
+
+                    const SizedBox(height: 18),
+                    sectionTitle('مزاج المريض'),
+                    moodStatusCard(),
 
                     const SizedBox(height: 18),
                     sectionTitle('الطوارئ'),
