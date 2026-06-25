@@ -42,7 +42,7 @@ flutter:
   uses-material-design: true
 
   assets:
+    - assets/data/medical_centers.json
     - assets/C.png
     - assets/heart.png
     - assets/logo.png
-

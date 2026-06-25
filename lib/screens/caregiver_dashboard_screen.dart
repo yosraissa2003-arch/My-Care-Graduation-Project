@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:mycare/screens/login_screen.dart';
+import '../widgets/nearby_medical_centers_section.dart';
 
 class CaregiverDashboardScreen extends StatefulWidget {
   const CaregiverDashboardScreen({super.key});
@@ -368,7 +369,6 @@ class _CaregiverDashboardScreenState extends State<CaregiverDashboardScreen> {
     return 'لا يوجد';
   }
 
-
   String _todayKey() {
     final now = DateTime.now();
     return '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
@@ -430,7 +430,8 @@ class _CaregiverDashboardScreenState extends State<CaregiverDashboardScreen> {
         );
       }
 
-      final uniqueDocs = <String, QueryDocumentSnapshot<Map<String, dynamic>>>{};
+      final uniqueDocs =
+          <String, QueryDocumentSnapshot<Map<String, dynamic>>>{};
       for (final doc in allDocs) {
         uniqueDocs[doc.id] = doc;
       }
@@ -471,7 +472,9 @@ class _CaregiverDashboardScreenState extends State<CaregiverDashboardScreen> {
 
     final text = '${mood['moodLabel'] ?? mood['label'] ?? mood['mood'] ?? ''}';
 
-    if (text.contains('جيد') || text.contains('سعيد') || text.contains('good')) {
+    if (text.contains('جيد') ||
+        text.contains('سعيد') ||
+        text.contains('good')) {
       return '🙂';
     }
     if (text.contains('حزين') || text.contains('sad')) {
@@ -564,7 +567,6 @@ class _CaregiverDashboardScreenState extends State<CaregiverDashboardScreen> {
       },
     );
   }
-
 
   Color statusColor(String status) {
     if (status == 'حرجة') return dangerColor;
@@ -943,6 +945,133 @@ class _CaregiverDashboardScreenState extends State<CaregiverDashboardScreen> {
     );
   }
 
+  double? _toDoubleValue(dynamic value) {
+    if (value == null) return null;
+    if (value is num) return value.toDouble();
+    return double.tryParse(value.toString().trim());
+  }
+
+  Map<String, dynamic>? _asStringMap(dynamic value) {
+    if (value is Map<String, dynamic>) return value;
+    if (value is Map) {
+      return value.map((key, val) => MapEntry(key.toString(), val));
+    }
+    return null;
+  }
+
+  double? _extractLatitude(Map<String, dynamic>? data) {
+    if (data == null) return null;
+
+    final direct = _toDoubleValue(
+      data['latitude'] ??
+          data['lat'] ??
+          data['lastLatitude'] ??
+          data['currentLatitude'] ??
+          data['lastKnownLatitude'],
+    );
+    if (direct != null) return direct;
+
+    final geo = data['geoPoint'] ?? data['locationPoint'];
+    if (geo is GeoPoint) return geo.latitude;
+
+    for (final key in [
+      'location',
+      'lastLocation',
+      'currentLocation',
+      'lastKnownLocation',
+    ]) {
+      final location = _asStringMap(data[key]);
+      final lat = _toDoubleValue(location?['latitude'] ?? location?['lat']);
+      if (lat != null) return lat;
+    }
+
+    return null;
+  }
+
+  double? _extractLongitude(Map<String, dynamic>? data) {
+    if (data == null) return null;
+
+    final direct = _toDoubleValue(
+      data['longitude'] ??
+          data['lng'] ??
+          data['lon'] ??
+          data['lastLongitude'] ??
+          data['currentLongitude'] ??
+          data['lastKnownLongitude'],
+    );
+    if (direct != null) return direct;
+
+    final geo = data['geoPoint'] ?? data['locationPoint'];
+    if (geo is GeoPoint) return geo.longitude;
+
+    for (final key in [
+      'location',
+      'lastLocation',
+      'currentLocation',
+      'lastKnownLocation',
+    ]) {
+      final location = _asStringMap(data[key]);
+      final lng = _toDoubleValue(
+        location?['longitude'] ?? location?['lng'] ?? location?['lon'],
+      );
+      if (lng != null) return lng;
+    }
+
+    return null;
+  }
+
+  Widget nearbyMedicalCentersForPatient() {
+    final savedLat = _extractLatitude(patientData);
+    final savedLng = _extractLongitude(patientData);
+
+    if (savedLat != null && savedLng != null) {
+      return NearbyMedicalCentersSection(
+        patientLat: savedLat,
+        patientLng: savedLng,
+        limit: 5,
+        title: 'أقرب المراكز الطبية للمريض',
+      );
+    }
+
+    return FutureBuilder<Map<String, dynamic>?>(
+      future: getLatestActiveSos(),
+      builder: (context, snapshot) {
+        final sosData = snapshot.data;
+        final sosLat = _extractLatitude(sosData);
+        final sosLng = _extractLongitude(sosData);
+
+        if (sosLat != null && sosLng != null) {
+          return NearbyMedicalCentersSection(
+            patientLat: sosLat,
+            patientLng: sosLng,
+            limit: 5,
+            title: 'أقرب المراكز الطبية لموقع SOS',
+          );
+        }
+
+        return Container(
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            color: cardColor,
+            borderRadius: BorderRadius.circular(22),
+            border: Border.all(color: primaryColor.withOpacity(0.12)),
+          ),
+          child: const Text(
+            'لا يوجد موقع محفوظ للمريض حالياً. عند إرسال SOS مع الموقع ستظهر هنا أقرب المستشفيات والعيادات مع زر الموقع ورقم الطوارئ 101.',
+            textAlign: TextAlign.right,
+            style: TextStyle(
+              fontSize: 16,
+              fontFamily: 'Cairo',
+              color: secondaryTextColor,
+              height: 1.5,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final caregiverName = caregiverData?['fullName'] ?? '';
@@ -1022,6 +1151,10 @@ class _CaregiverDashboardScreenState extends State<CaregiverDashboardScreen> {
                     const SizedBox(height: 18),
                     sectionTitle('الطوارئ'),
                     sosCard(),
+
+                    const SizedBox(height: 18),
+                    sectionTitle('أقرب المراكز الطبية'),
+                    nearbyMedicalCentersForPatient(),
 
                     const SizedBox(height: 18),
                     sectionTitle('الخدمات السريعة'),

@@ -18,6 +18,7 @@ import 'appointments_screen.dart';
 import 'care_timeline_screen.dart';
 import 'mood_history_screen.dart';
 import '../services/care_timeline_service.dart';
+import '../widgets/nearby_medical_centers_section.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -293,6 +294,13 @@ class _HomeScreenState extends State<HomeScreen> {
 
             const SizedBox(height: 24),
 
+            const NearbyMedicalCentersSection(
+              title: 'أقرب المراكز الطبية',
+              limit: 5,
+            ),
+
+            const SizedBox(height: 24),
+
             _sosButton(context, uid, user),
           ],
         ),
@@ -535,6 +543,13 @@ class _HomeScreenState extends State<HomeScreen> {
                   height: 1.5,
                 ),
               ),
+            ),
+
+            const SizedBox(height: 24),
+
+            const NearbyMedicalCentersSection(
+              title: 'المراكز الطبية القريبة',
+              limit: 5,
             ),
 
             const SizedBox(height: 24),
@@ -1107,6 +1122,18 @@ class _HomeScreenState extends State<HomeScreen> {
           : null,
       'createdAt': Timestamp.now(),
     });
+
+    if (position != null) {
+      await FirebaseFirestore.instance.collection('users').doc(uid).set({
+        'lastLatitude': position.latitude,
+        'lastLongitude': position.longitude,
+        'lastLocation': {
+          'latitude': position.latitude,
+          'longitude': position.longitude,
+        },
+        'lastLocationUpdatedAt': Timestamp.now(),
+      }, SetOptions(merge: true));
+    }
 
     await FirebaseFirestore.instance.collection('notifications').add({
       'userId': uid,
