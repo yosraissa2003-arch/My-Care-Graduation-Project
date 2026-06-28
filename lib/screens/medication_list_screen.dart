@@ -6,13 +6,16 @@ import 'add_medication_screen.dart';
 import '../services/care_timeline_service.dart';
 
 class AppColors {
-  static const Color primary = Color(0xFF1E3A5F);
-  static const Color background = Color(0xFFF7F8FA);
+  static const Color primary = Color(0xFF1F4168);
+  static const Color background = Color(0xFFF7F9FC);
   static const Color card = Colors.white;
-  static const Color border = Color(0xFFE5E7EB);
-  static const Color success = Color(0xFF2E7D32);
+  static const Color border = Color(0xFFC9D6E2);
+  static const Color success = Color(0xFF2E8B57);
   static const Color danger = Color(0xFFD32F2F);
   static const Color warning = Color(0xFFED6C02);
+  static const Color lightBlue = Color(0xFFEAF3FF);
+  static const Color textDark = Color(0xFF111827);
+  static const Color textGray = Color(0xFF4B5563);
 }
 
 enum MedicationFilter { all, morning, evening, taken, pending }

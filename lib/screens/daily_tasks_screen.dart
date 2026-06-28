@@ -12,18 +12,21 @@ class DailyTasksScreen extends StatefulWidget {
 
 class _DailyTasksScreenState extends State<DailyTasksScreen> {
   static const Color dark = Color(0xff172638);
+  static const Color primary = Color(0xFF1E3A5F);
   static const Color green = Color(0xff2E8B57);
-  static const Color background = Color(0xFFF7F8FA);
-  static const Color border = Color(0xffE5E5E5);
+  static const Color background = Color(0xFFF7F9FC);
+  static const Color border = Color(0xffE5E7EB);
+  static const Color softBlue = Color(0xFFEAF3FF);
+  static const Color softGreen = Color(0xffEAF7EF);
 
   bool _creatingDefaults = false;
 
   final List<Map<String, dynamic>> _defaultTasks = const [
     {
-      'title': 'اشرب ماء',
-      'type': 'water',
-      'icon': 'water',
-      'description': 'حافظ على شرب الماء خلال اليوم',
+      'title': 'خذ الدواء',
+      'type': 'medication',
+      'icon': 'medication',
+      'description': 'تأكد من أخذ أدوية اليوم في وقتها',
     },
     {
       'title': 'امشِ 10 دقائق',
@@ -32,16 +35,16 @@ class _DailyTasksScreenState extends State<DailyTasksScreen> {
       'description': 'حركة بسيطة تساعد على النشاط',
     },
     {
+      'title': 'اشرب ماء',
+      'type': 'water',
+      'icon': 'water',
+      'description': 'حافظ على شرب الماء خلال اليوم',
+    },
+    {
       'title': 'افحص السكر',
       'type': 'glucose',
       'icon': 'glucose',
       'description': 'سجل قراءة السكر إذا كانت مطلوبة اليوم',
-    },
-    {
-      'title': 'خذ الدواء',
-      'type': 'medication',
-      'icon': 'medication',
-      'description': 'تأكد من أخذ أدوية اليوم في وقتها',
     },
   ];
 
@@ -52,11 +55,13 @@ class _DailyTasksScreenState extends State<DailyTasksScreen> {
     if (_creatingDefaults || docs.isNotEmpty) return;
 
     _creatingDefaults = true;
+
     final batch = FirebaseFirestore.instance.batch();
     final dateKey = CareTimelineService.todayKey();
 
     for (final task in _defaultTasks) {
       final ref = FirebaseFirestore.instance.collection('dailyTasks').doc();
+
       batch.set(ref, {
         'userId': uid,
         'patientId': uid,
@@ -72,6 +77,7 @@ class _DailyTasksScreenState extends State<DailyTasksScreen> {
     }
 
     await batch.commit();
+
     _creatingDefaults = false;
   }
 
@@ -99,6 +105,7 @@ class _DailyTasksScreenState extends State<DailyTasksScreen> {
         title: 'تم إنجاز مهمة يومية',
         details: title,
       );
+
       await CareTimelineService.updateLastActivity(uid);
     }
   }
@@ -116,6 +123,245 @@ class _DailyTasksScreenState extends State<DailyTasksScreen> {
       default:
         return Icons.task_alt_rounded;
     }
+  }
+
+  int _taskOrder(String type) {
+    switch (type) {
+      case 'medication':
+        return 0;
+      case 'walk':
+        return 1;
+      case 'water':
+        return 2;
+      case 'glucose':
+        return 3;
+      default:
+        return 4;
+    }
+  }
+
+  Widget _progressCard({required int doneCount, required int total}) {
+    final double progress = total == 0 ? 0 : doneCount / total;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(26),
+        border: Border.all(color: border, width: 1.2),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.025),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            textDirection: TextDirection.rtl,
+            children: [
+              Container(
+                width: 66,
+                height: 66,
+                decoration: BoxDecoration(
+                  color: softGreen,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: const Icon(
+                  Icons.check_circle_outline_rounded,
+                  color: green,
+                  size: 40,
+                ),
+              ),
+
+              const SizedBox(width: 14),
+
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const Text(
+                      'تقدّم اليوم',
+                      textDirection: TextDirection.rtl,
+                      textAlign: TextAlign.right,
+                      style: TextStyle(
+                        fontSize: 25,
+                        fontWeight: FontWeight.w900,
+                        color: dark,
+                        fontFamily: 'Cairo',
+                        height: 1.3,
+                      ),
+                    ),
+
+                    const SizedBox(height: 5),
+
+                    Text(
+                      total == 0
+                          ? 'يتم تجهيز مهام اليوم...'
+                          : 'تم إنجاز $doneCount من $total مهام',
+                      textDirection: TextDirection.rtl,
+                      textAlign: TextAlign.right,
+                      style: const TextStyle(
+                        fontSize: 21,
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFF4B5563),
+                        fontFamily: 'Cairo',
+                        height: 1.4,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 16),
+
+          ClipRRect(
+            borderRadius: BorderRadius.circular(20),
+            child: LinearProgressIndicator(
+              minHeight: 12,
+              value: progress,
+              backgroundColor: const Color(0xFFE5E7EB),
+              valueColor: const AlwaysStoppedAnimation<Color>(green),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _taskCard({
+    required String uid,
+    required String docId,
+    required Map<String, dynamic> data,
+  }) {
+    final bool isDone = data['isDone'] == true;
+    final String title = (data['title'] ?? 'مهمة').toString();
+    final String description = (data['description'] ?? '').toString();
+    final String icon = (data['icon'] ?? '').toString();
+
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(
+          color: isDone ? green : border,
+          width: isDone ? 2 : 1.2,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.025),
+            blurRadius: 9,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Row(
+        textDirection: TextDirection.rtl,
+        children: [
+          Container(
+            width: 64,
+            height: 64,
+            decoration: BoxDecoration(
+              color: isDone ? softGreen : softBlue,
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Icon(
+              isDone ? Icons.check_circle_rounded : _iconFor(icon),
+              color: isDone ? green : dark,
+              size: 36,
+            ),
+          ),
+
+          const SizedBox(width: 14),
+
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  title,
+                  textDirection: TextDirection.rtl,
+                  textAlign: TextAlign.right,
+                  style: TextStyle(
+                    fontSize: 25,
+                    fontWeight: FontWeight.w900,
+                    color: isDone ? green : dark,
+                    fontFamily: 'Cairo',
+                    height: 1.3,
+                  ),
+                ),
+
+                if (description.isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    description,
+                    textDirection: TextDirection.rtl,
+                    textAlign: TextAlign.right,
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF6B7280),
+                      fontFamily: 'Cairo',
+                      height: 1.5,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+
+          const SizedBox(width: 12),
+
+          SizedBox(
+            height: 52,
+            child: ElevatedButton(
+              onPressed: () => _toggleTask(uid: uid, docId: docId, data: data),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: isDone ? green : primary,
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                padding: const EdgeInsets.symmetric(horizontal: 18),
+              ),
+              child: Text(
+                isDone ? 'تم' : 'إنجاز',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 17,
+                  fontWeight: FontWeight.w900,
+                  fontFamily: 'Cairo',
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _introText() {
+    return const Text(
+      'تابع مهامك اليومية البسيطة، واضغط إنجاز عند الانتهاء من كل مهمة.',
+      textDirection: TextDirection.rtl,
+      textAlign: TextAlign.right,
+      style: TextStyle(
+        fontSize: 18,
+        fontWeight: FontWeight.w800,
+        color: Color(0xFF4B5563),
+        fontFamily: 'Cairo',
+        height: 1.6,
+      ),
+    );
   }
 
   @override
@@ -139,13 +385,24 @@ class _DailyTasksScreenState extends State<DailyTasksScreen> {
           backgroundColor: background,
           elevation: 0,
           centerTitle: true,
+          automaticallyImplyLeading: false,
+          leading: IconButton(
+            onPressed: () => Navigator.pop(context),
+            icon: const Icon(
+              Icons.arrow_forward_ios_rounded,
+              color: dark,
+              size: 28,
+            ),
+          ),
           title: const Text(
-            'مهام اليوم',
+            'مهامي اليومية',
+            textAlign: TextAlign.center,
             style: TextStyle(
               color: dark,
-              fontSize: 30,
+              fontSize: 32,
               fontWeight: FontWeight.w900,
               fontFamily: 'Cairo',
+              height: 1.3,
             ),
           ),
         ),
@@ -172,7 +429,13 @@ class _DailyTasksScreenState extends State<DailyTasksScreen> {
               return const Center(
                 child: Text(
                   'حدث خطأ أثناء تحميل المهام',
-                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900),
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w900,
+                    color: dark,
+                    fontFamily: 'Cairo',
+                  ),
                 ),
               );
             }
@@ -182,12 +445,21 @@ class _DailyTasksScreenState extends State<DailyTasksScreen> {
             docs.sort((a, b) {
               final aDone = a.data()['isDone'] == true ? 1 : 0;
               final bDone = b.data()['isDone'] == true ? 1 : 0;
-              return aDone.compareTo(bDone);
+
+              if (aDone != bDone) {
+                return aDone.compareTo(bDone);
+              }
+
+              final aType = (a.data()['type'] ?? '').toString();
+              final bType = (b.data()['type'] ?? '').toString();
+
+              return _taskOrder(aType).compareTo(_taskOrder(bType));
             });
 
             final doneCount = docs
                 .where((doc) => doc.data()['isDone'] == true)
                 .length;
+
             final total = docs.length;
 
             return RefreshIndicator(
@@ -195,137 +467,16 @@ class _DailyTasksScreenState extends State<DailyTasksScreen> {
               child: ListView(
                 padding: const EdgeInsets.all(18),
                 children: [
-                  Container(
-                    padding: const EdgeInsets.all(20),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(24),
-                      border: Border.all(color: border),
-                    ),
-                    child: Row(
-                      children: [
-                        const CircleAvatar(
-                          radius: 31,
-                          backgroundColor: Color(0xffEEF8F1),
-                          child: Icon(
-                            Icons.task_alt_rounded,
-                            color: green,
-                            size: 38,
-                          ),
-                        ),
-                        const SizedBox(width: 14),
-                        Expanded(
-                          child: Text(
-                            total == 0
-                                ? 'يتم تجهيز مهام اليوم...'
-                                : 'إنجاز اليوم: $doneCount من $total مهام',
-                            textAlign: TextAlign.right,
-                            style: const TextStyle(
-                              fontSize: 23,
-                              fontWeight: FontWeight.w900,
-                              color: dark,
-                              height: 1.5,
-                              fontFamily: 'Cairo',
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 18),
-                  ...docs.map((doc) {
-                    final data = doc.data();
-                    final isDone = data['isDone'] == true;
-                    final title = (data['title'] ?? 'مهمة').toString();
-                    final description = (data['description'] ?? '').toString();
-                    final icon = (data['icon'] ?? '').toString();
+                  _introText(),
 
-                    return Container(
-                      margin: const EdgeInsets.only(bottom: 14),
-                      padding: const EdgeInsets.all(18),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(24),
-                        border: Border.all(
-                          color: isDone ? green : border,
-                          width: isDone ? 2 : 1.3,
-                        ),
-                      ),
-                      child: Row(
-                        children: [
-                          CircleAvatar(
-                            radius: 30,
-                            backgroundColor: isDone
-                                ? const Color(0xffE4F3E8)
-                                : const Color(0xffEAF2FA),
-                            child: Icon(
-                              isDone
-                                  ? Icons.check_circle_rounded
-                                  : _iconFor(icon),
-                              color: isDone ? green : dark,
-                              size: 34,
-                            ),
-                          ),
-                          const SizedBox(width: 14),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  title,
-                                  textAlign: TextAlign.right,
-                                  style: const TextStyle(
-                                    fontSize: 23,
-                                    fontWeight: FontWeight.w900,
-                                    color: dark,
-                                    fontFamily: 'Cairo',
-                                  ),
-                                ),
-                                if (description.isNotEmpty) ...[
-                                  const SizedBox(height: 5),
-                                  Text(
-                                    description,
-                                    textAlign: TextAlign.right,
-                                    style: const TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w700,
-                                      color: Colors.black54,
-                                      fontFamily: 'Cairo',
-                                    ),
-                                  ),
-                                ],
-                              ],
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          ElevatedButton(
-                            onPressed: () => _toggleTask(
-                              uid: uid,
-                              docId: doc.id,
-                              data: data,
-                            ),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: isDone ? green : dark,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(16),
-                              ),
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 18,
-                                vertical: 12,
-                              ),
-                            ),
-                            child: Text(
-                              isDone ? 'تم' : 'إنجاز',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w900,
-                                fontFamily: 'Cairo',
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    );
+                  const SizedBox(height: 14),
+
+                  _progressCard(doneCount: doneCount, total: total),
+
+                  const SizedBox(height: 18),
+
+                  ...docs.map((doc) {
+                    return _taskCard(uid: uid, docId: doc.id, data: doc.data());
                   }),
                 ],
               ),

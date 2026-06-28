@@ -22,11 +22,15 @@ class _LoginScreenState extends State<LoginScreen> {
   bool isLoading = false;
   bool obscurePassword = true;
 
-  static const Color primaryColor = Color(0xFF1E3A5F);
-  static const Color backgroundColor = Color(0xFFF7F8FA);
+  static const Color primaryColor = Color(0xFF1F4168);
+  static const Color backgroundColor = Color(0xFFF7F9FC);
   static const Color cardColor = Color(0xFFFFFFFF);
-  static const Color textColor = Color(0xFF1F2937);
-  static const Color secondaryTextColor = Color(0xFF4B5563);
+
+  // Darker text colors for better readability for elderly users
+  static const Color textColor = Color(0xFF111827);
+  static const Color secondaryTextColor = Color(0xFF374151);
+  static const Color borderColor = Color(0xFFC9D6E2);
+
   static const Color warningColor = Color(0xFFED6C02);
   static const Color errorColor = Color(0xFFD32F2F);
   static const Color successColor = Color(0xFF2E7D32);
@@ -80,6 +84,7 @@ class _LoginScreenState extends State<LoginScreen> {
     final normalized = normalizePhoneNumber(cleaned);
     if (normalized != null) {
       variants.add(normalized);
+
       if (normalized.startsWith('970') || normalized.startsWith('972')) {
         variants.add('0${normalized.substring(3)}');
       }
@@ -133,6 +138,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Future<String?> getEmailForLogin(String phone) async {
     final userDoc = await findUserByPhone(phone);
+
     if (userDoc != null) {
       final data = userDoc.data() ?? {};
       final email = (data['email'] ?? '').toString().trim();
@@ -159,14 +165,15 @@ class _LoginScreenState extends State<LoginScreen> {
         backgroundColor: color,
         behavior: SnackBarBehavior.floating,
         margin: const EdgeInsets.all(20),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
         content: Text(
           message,
           textAlign: TextAlign.right,
           style: const TextStyle(
             fontSize: 18,
             fontFamily: 'Cairo',
-            fontWeight: FontWeight.w600,
+            fontWeight: FontWeight.w700,
+            color: Colors.white,
           ),
         ),
         action: SnackBarAction(
@@ -390,18 +397,27 @@ class _LoginScreenState extends State<LoginScreen> {
     return InputDecoration(
       hintText: hint,
       hintStyle: const TextStyle(
-        fontSize: 18,
+        fontSize: 19,
         fontFamily: 'Cairo',
-        color: secondaryTextColor,
+        color: Color(0xFF6B7280),
+        fontWeight: FontWeight.w500,
       ),
-      prefixIcon: Icon(icon, color: primaryColor),
+      prefixIcon: Icon(icon, color: primaryColor, size: 28),
       suffixIcon: suffixIcon,
       filled: true,
       fillColor: cardColor,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(18),
+        borderSide: const BorderSide(color: borderColor, width: 1.3),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(18),
+        borderSide: const BorderSide(color: primaryColor, width: 2),
+      ),
       border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(16),
-        borderSide: BorderSide.none,
+        borderRadius: BorderRadius.circular(18),
+        borderSide: const BorderSide(color: borderColor, width: 1.3),
       ),
     );
   }
@@ -414,43 +430,75 @@ class _LoginScreenState extends State<LoginScreen> {
         backgroundColor: backgroundColor,
         body: SafeArea(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.all(20),
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
             child: AutofillGroup(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const SizedBox(height: 40),
+                  const SizedBox(height: 36),
+
                   const Text(
                     'تسجيل الدخول',
                     textAlign: TextAlign.center,
                     style: TextStyle(
-                      fontSize: 24,
+                      fontSize: 30,
                       fontFamily: 'Cairo',
-                      fontWeight: FontWeight.w700,
+                      fontWeight: FontWeight.w800,
                       color: primaryColor,
                     ),
                   ),
-                  const SizedBox(height: 24),
+
+                  const SizedBox(height: 22),
+
                   Container(
-                    padding: const EdgeInsets.all(20),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 22,
+                    ),
                     decoration: BoxDecoration(
                       color: cardColor,
-                      borderRadius: BorderRadius.circular(20),
+                      borderRadius: BorderRadius.circular(22),
+                      border: Border.all(color: borderColor, width: 1.2),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.05),
+                          blurRadius: 12,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
                     ),
-                    child: const Text(
-                      'أدخل رقم الهاتف وكلمة المرور للوصول إلى حسابك.',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontFamily: 'Cairo',
-                        color: secondaryTextColor,
-                        height: 1.5,
-                      ),
+                    child: const Column(
+                      children: [
+                        Text(
+                          'أهلًا بك في رعايتي',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 24,
+                            fontFamily: 'Cairo',
+                            color: primaryColor,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        SizedBox(height: 10),
+                        Text(
+                          'أدخل رقم الهاتف وكلمة المرور لتسجيل الدخول إلى حسابك.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 19,
+                            fontFamily: 'Cairo',
+                            color: textColor,
+                            height: 1.6,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                  const SizedBox(height: 24),
+
+                  const SizedBox(height: 26),
+
                   SizedBox(
-                    height: 56,
+                    height: 62,
                     child: TextField(
                       controller: phoneController,
                       keyboardType: TextInputType.phone,
@@ -460,9 +508,10 @@ class _LoginScreenState extends State<LoginScreen> {
                       ],
                       textInputAction: TextInputAction.next,
                       style: const TextStyle(
-                        fontSize: 18,
+                        fontSize: 20,
                         fontFamily: 'Cairo',
                         color: textColor,
+                        fontWeight: FontWeight.w600,
                       ),
                       decoration: inputDecoration(
                         hint: 'رقم الهاتف',
@@ -470,18 +519,21 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                     ),
                   ),
-                  const SizedBox(height: 16),
+
+                  const SizedBox(height: 18),
+
                   SizedBox(
-                    height: 56,
+                    height: 62,
                     child: TextField(
                       controller: passwordController,
                       obscureText: obscurePassword,
                       autofillHints: const [AutofillHints.password],
                       textInputAction: TextInputAction.done,
                       style: const TextStyle(
-                        fontSize: 18,
+                        fontSize: 20,
                         fontFamily: 'Cairo',
                         color: textColor,
+                        fontWeight: FontWeight.w600,
                       ),
                       decoration: inputDecoration(
                         hint: 'كلمة المرور',
@@ -492,6 +544,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                 ? Icons.visibility_off
                                 : Icons.visibility,
                             color: secondaryTextColor,
+                            size: 28,
                           ),
                           onPressed: () {
                             setState(() => obscurePassword = !obscurePassword);
@@ -500,9 +553,11 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                     ),
                   ),
-                  const SizedBox(height: 6),
+
+                  const SizedBox(height: 8),
+
                   Align(
-                    alignment: Alignment.centerLeft,
+                    alignment: Alignment.centerRight,
                     child: TextButton(
                       onPressed: isLoading
                           ? null
@@ -513,76 +568,93 @@ class _LoginScreenState extends State<LoginScreen> {
                       child: const Text(
                         'نسيت كلمة المرور؟',
                         style: TextStyle(
-                          fontSize: 16,
+                          fontSize: 18,
                           fontFamily: 'Cairo',
-                          fontWeight: FontWeight.bold,
+                          fontWeight: FontWeight.w800,
                           color: primaryColor,
                         ),
                       ),
                     ),
                   ),
-                  const SizedBox(height: 10),
+
+                  const SizedBox(height: 16),
+
                   SizedBox(
-                    height: 56,
+                    height: 62,
                     child: ElevatedButton.icon(
                       onPressed: isLoading ? null : login,
                       icon: isLoading
                           ? const SizedBox(
-                              width: 22,
-                              height: 22,
+                              width: 24,
+                              height: 24,
                               child: CircularProgressIndicator(
-                                strokeWidth: 2.5,
+                                strokeWidth: 2.7,
                                 color: Colors.white,
                               ),
                             )
-                          : const Icon(Icons.login, color: Colors.white),
+                          : const Icon(
+                              Icons.login,
+                              color: Colors.white,
+                              size: 28,
+                            ),
                       label: Text(
                         isLoading ? 'جاري تسجيل الدخول' : 'تسجيل الدخول',
                         style: const TextStyle(
-                          fontSize: 18,
+                          fontSize: 21,
                           fontFamily: 'Cairo',
-                          fontWeight: FontWeight.bold,
+                          fontWeight: FontWeight.w800,
                           color: Colors.white,
                         ),
                       ),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: primaryColor,
+                        elevation: 2,
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
+                          borderRadius: BorderRadius.circular(18),
                         ),
                       ),
                     ),
                   ),
+
                   const SizedBox(height: 16),
+
                   SizedBox(
-                    height: 56,
+                    height: 62,
                     child: OutlinedButton.icon(
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => const SignUpStep1(),
-                          ),
-                        );
-                      },
-                      icon: const Icon(Icons.person_add, color: primaryColor),
+                      onPressed: isLoading
+                          ? null
+                          : () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => const SignUpStep1(),
+                                ),
+                              );
+                            },
+                      icon: const Icon(
+                        Icons.person_add,
+                        color: primaryColor,
+                        size: 28,
+                      ),
                       label: const Text(
                         'إنشاء حساب جديد',
                         style: TextStyle(
-                          fontSize: 18,
+                          fontSize: 21,
                           fontFamily: 'Cairo',
-                          fontWeight: FontWeight.bold,
+                          fontWeight: FontWeight.w800,
                           color: primaryColor,
                         ),
                       ),
                       style: OutlinedButton.styleFrom(
-                        side: const BorderSide(color: primaryColor, width: 1.5),
+                        side: const BorderSide(color: primaryColor, width: 1.8),
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
+                          borderRadius: BorderRadius.circular(18),
                         ),
                       ),
                     ),
                   ),
+
+                  const SizedBox(height: 24),
                 ],
               ),
             ),

@@ -5,9 +5,9 @@ import 'package:geolocator/geolocator.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
+
 import '../services/notification_service.dart';
 import '../services/care_timeline_service.dart';
-import '../services/wearable_health_service.dart';
 
 class AddHealthDataScreen extends StatefulWidget {
   final bool autoImportFromWatch;
@@ -28,32 +28,27 @@ class _AddHealthDataScreenState extends State<AddHealthDataScreen> {
 
   bool isLoading = false;
   bool isListening = false;
-  bool isImportingFromWatch = false;
-  bool importedFromWatch = false;
   String lastVoiceText = '';
-  String watchImportMessage = '';
-  WearableReading? lastWearableReading;
-
-  final WearableHealthService _wearableHealthService = WearableHealthService();
 
   late final stt.SpeechToText _speech = stt.SpeechToText();
   late final FlutterTts _tts = FlutterTts();
 
-  static const Color dark = Color(0xff172638);
-  static const Color green = Color(0xff2E8B57);
-  static const Color border = Color(0xffD8D8D8);
-  static const Color fieldBg = Color(0xffF8F8F8);
+  static const Color primaryColor = Color(0xFF1F4168);
+  static const Color backgroundColor = Color(0xFFF7F9FC);
+  static const Color cardColor = Color(0xFFFFFFFF);
+  static const Color dark = Color(0xFF111827);
+  static const Color secondaryTextColor = Color(0xFF4B5563);
+  static const Color hintColor = Color(0xFF9CA3AF);
+  static const Color green = Color(0xFF2E8B57);
+  static const Color errorColor = Color(0xFFD32F2F);
+  static const Color warningColor = Color(0xFFED6C02);
+  static const Color border = Color(0xFFC9D6E2);
+  static const Color fieldBg = Color(0xFFFFFFFF);
 
   @override
   void initState() {
     super.initState();
     _setupVoice();
-
-    if (widget.autoImportFromWatch) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        importLatestReadingFromWatch();
-      });
-    }
   }
 
   Future<void> _setupVoice() async {
@@ -71,93 +66,33 @@ class _AddHealthDataScreenState extends State<AddHealthDataScreen> {
     } catch (_) {}
   }
 
-  Future<void> importLatestReadingFromWatch() async {
-    if (isImportingFromWatch) return;
-
-    setState(() {
-      isImportingFromWatch = true;
-      watchImportMessage = 'جاري الاتصال بالساعة وقراءة آخر البيانات...';
-    });
-
-    try {
-      final result = await _wearableHealthService.fetchLatestReading();
-
-      if (!mounted) return;
-
-      if (!result.success || result.reading == null) {
-        setState(() {
-          watchImportMessage = result.message;
-          importedFromWatch = false;
-          lastWearableReading = null;
-        });
-
-        await _speak('لم أستطع استيراد القراءة من الساعة');
-        _showSnack(result.message, color: Colors.red);
-        return;
-      }
-
-      final reading = result.reading!;
-
-      setState(() {
-        if (reading.heartRate != null) {
-          heartRateController.text = reading.heartRate.toString();
-        }
-
-        if (reading.systolic != null) {
-          systolicController.text = reading.systolic.toString();
-        }
-
-        if (reading.diastolic != null) {
-          diastolicController.text = reading.diastolic.toString();
-        }
-
-        if (reading.glucose != null) {
-          glucoseController.text = reading.glucose.toString();
-        }
-
-        if (reading.oxygen != null) {
-          oxygenController.text = reading.oxygen.toString();
-        }
-
-        if (reading.temperature != null) {
-          temperatureController.text = reading.temperature!.toStringAsFixed(1);
-        }
-
-        importedFromWatch = true;
-        lastWearableReading = reading;
-        watchImportMessage = result.message;
-      });
-
-      await _speak('تم استيراد القراءات المتوفرة من الساعة');
-      _showSnack(result.message, color: green);
-    } finally {
-      if (mounted) {
-        setState(() {
-          isImportingFromWatch = false;
-        });
-      }
-    }
-  }
-
-  void _showSnack(String message, {Color color = dark}) {
+  void _showSnack(String message, {Color color = primaryColor}) {
     if (!mounted) return;
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         backgroundColor: color,
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.all(18),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
         content: Text(
           message,
           textAlign: TextAlign.right,
-          style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
+          style: const TextStyle(
+            fontSize: 18,
+            fontFamily: 'Cairo',
+            fontWeight: FontWeight.w800,
+            color: Colors.white,
+          ),
         ),
       ),
     );
   }
 
-
   Future<String?> _bestArabicLocale() async {
     try {
       final locales = await _speech.locales();
+
       final preferred = [
         'ar_PS',
         'ar-PS',
@@ -207,6 +142,7 @@ class _AddHealthDataScreenState extends State<AddHealthDataScreen> {
       if (!serviceEnabled) return null;
 
       LocationPermission permission = await Geolocator.checkPermission();
+
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
       }
@@ -273,15 +209,7 @@ class _AddHealthDataScreenState extends State<AddHealthDataScreen> {
     final currentUser = FirebaseAuth.instance.currentUser;
 
     if (currentUser == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'يجب تسجيل الدخول أولاً',
-            textAlign: TextAlign.right,
-            style: TextStyle(fontSize: 18),
-          ),
-        ),
-      );
+      _showSnack('يجب تسجيل الدخول أولًا', color: errorColor);
       return;
     }
 
@@ -293,15 +221,7 @@ class _AddHealthDataScreenState extends State<AddHealthDataScreen> {
         glucoseController.text.trim().isEmpty ||
         oxygenController.text.trim().isEmpty ||
         temperatureController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'الرجاء تعبئة جميع الحقول',
-            textAlign: TextAlign.right,
-            style: TextStyle(fontSize: 18),
-          ),
-        ),
-      );
+      _showSnack('يرجى تعبئة جميع الحقول', color: warningColor);
       return;
     }
 
@@ -320,15 +240,7 @@ class _AddHealthDataScreenState extends State<AddHealthDataScreen> {
         glucose == null ||
         oxygen == null ||
         temperature == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'تأكدي أن جميع القيم أرقام صحيحة',
-            textAlign: TextAlign.right,
-            style: TextStyle(fontSize: 18),
-          ),
-        ),
-      );
+      _showSnack('تأكد أن جميع القيم أرقام صحيحة', color: errorColor);
       return;
     }
 
@@ -343,6 +255,7 @@ class _AddHealthDataScreenState extends State<AddHealthDataScreen> {
           .get();
 
       final userData = userDoc.data() ?? {};
+
       final patientName =
           (userData['fullName'] ??
                   userData['name'] ??
@@ -354,6 +267,7 @@ class _AddHealthDataScreenState extends State<AddHealthDataScreen> {
       final emergencyPhone = (userData['emergencyContact'] ?? '').toString();
 
       String caregiverId = '';
+
       final linkedCaregiverPhone =
           (userData['linkedPhone'] ??
                   userData['linkedPatientPhone'] ??
@@ -404,15 +318,8 @@ class _AddHealthDataScreenState extends State<AddHealthDataScreen> {
         'temperature': temperature,
         'aiStatus': aiResult['status'],
         'aiMessage': aiResult['message'],
-        'source': importedFromWatch ? 'wearable' : 'manual',
-        'isWearableReading': importedFromWatch,
-        if (importedFromWatch && lastWearableReading != null) ...{
-          'wearablePlatform': lastWearableReading!.platform,
-          'wearableSourceName': lastWearableReading!.sourceName,
-          'wearableSyncedAt': lastWearableReading!.syncedAt != null
-              ? Timestamp.fromDate(lastWearableReading!.syncedAt!)
-              : null,
-        },
+        'source': 'manual',
+        'isWearableReading': false,
         'createdAt': Timestamp.now(),
       };
 
@@ -431,7 +338,7 @@ class _AddHealthDataScreenState extends State<AddHealthDataScreen> {
         type: 'health',
         title: 'تم تسجيل قراءة صحية',
         details:
-            '${importedFromWatch ? 'من الساعة - ' : ''}النبض $heartRate، الضغط $systolic/$diastolic، السكر $glucose، الأكسجين $oxygen، الحرارة $temperature',
+            'النبض $heartRate، الضغط $systolic/$diastolic، السكر $glucose، الأكسجين $oxygen، الحرارة $temperature',
       );
 
       if (aiResult['status'] == 'Warning' || aiResult['status'] == 'Critical') {
@@ -503,6 +410,7 @@ class _AddHealthDataScreenState extends State<AddHealthDataScreen> {
       }
 
       bool remindersScheduled = false;
+
       try {
         await NotificationService.scheduleHealthReadingReminders(
           morningHour: 8,
@@ -510,6 +418,7 @@ class _AddHealthDataScreenState extends State<AddHealthDataScreen> {
           eveningHour: 20,
           eveningMinute: 0,
         );
+
         remindersScheduled = true;
         debugPrint(
           'Health reading reminders scheduled after saving health data.',
@@ -520,22 +429,15 @@ class _AddHealthDataScreenState extends State<AddHealthDataScreen> {
 
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          backgroundColor: green,
-          content: Text(
-            remindersScheduled
-                ? 'تم الحفظ - الحالة: ${aiResult['status']}\nتم تفعيل تذكير 8 صباحاً و8 مساءً'
-                : 'تم الحفظ - الحالة: ${aiResult['status']}',
-            textAlign: TextAlign.right,
-            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-          ),
-        ),
+      _showSnack(
+        remindersScheduled
+            ? 'تم حفظ القراءة بنجاح\nتم تفعيل تذكير 8 صباحًا و8 مساءً'
+            : 'تم حفظ القراءة بنجاح',
+        color: green,
       );
 
       Navigator.pop(context);
     } catch (e) {
-      bool remindersScheduled = false;
       try {
         await NotificationService.scheduleHealthReadingReminders(
           morningHour: 8,
@@ -543,25 +445,13 @@ class _AddHealthDataScreenState extends State<AddHealthDataScreen> {
           eveningHour: 20,
           eveningMinute: 0,
         );
-        remindersScheduled = true;
-        debugPrint(
-          'Health reading reminders scheduled after saving health data.',
-        );
       } catch (e) {
         debugPrint('Health reading reminders scheduling error: $e');
       }
 
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'حدث خطأ أثناء حفظ القراءة',
-            textAlign: TextAlign.right,
-            style: TextStyle(fontSize: 18),
-          ),
-        ),
-      );
+      _showSnack('حدث خطأ أثناء حفظ القراءة', color: errorColor);
     } finally {
       if (mounted) {
         setState(() {
@@ -571,113 +461,20 @@ class _AddHealthDataScreenState extends State<AddHealthDataScreen> {
     }
   }
 
-  Widget _watchImportCard() {
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: const Color(0xffF1F8FC),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: const Color(0xffD7E6F5), width: 1.4),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: const [
-              CircleAvatar(
-                radius: 28,
-                backgroundColor: Colors.white,
-                child: Icon(
-                  Icons.watch_rounded,
-                  color: dark,
-                  size: 32,
-                ),
-              ),
-              SizedBox(width: 14),
-              Expanded(
-                child: Text(
-                  'استيراد من الساعة الذكية',
-                  textAlign: TextAlign.right,
-                  style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.w900,
-                    color: dark,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          const Text(
-            'يعمل مع الساعات التي تزامن قراءاتها مع Apple Health أو Google Health Connect. سيتم تعبئة القراءات المتوفرة فقط، وأي قراءة غير موجودة يمكنك إدخالها يدويًا.',
-            textAlign: TextAlign.right,
-            style: TextStyle(
-              fontSize: 16.5,
-              fontWeight: FontWeight.w700,
-              color: Color(0xff4B5563),
-              height: 1.5,
-            ),
-          ),
-          if (watchImportMessage.trim().isNotEmpty) ...[
-            const SizedBox(height: 12),
-            Text(
-              watchImportMessage,
-              textAlign: TextAlign.right,
-              style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w800,
-                color: dark,
-                height: 1.5,
-              ),
-            ),
-          ],
-          const SizedBox(height: 14),
-          ElevatedButton.icon(
-            onPressed: isImportingFromWatch ? null : importLatestReadingFromWatch,
-            icon: isImportingFromWatch
-                ? const SizedBox(
-                    width: 26,
-                    height: 26,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 3,
-                      color: Colors.white,
-                    ),
-                  )
-                : const Icon(
-                    Icons.sync_rounded,
-                    color: Colors.white,
-                    size: 30,
-                  ),
-            label: Text(
-              isImportingFromWatch
-                  ? 'جاري الاستيراد...'
-                  : 'استيراد آخر قراءة من الساعة',
-              style: const TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.w900,
-                color: Colors.white,
-              ),
-            ),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: dark,
-              minimumSize: const Size(double.infinity, 58),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(18),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _voiceHealthInputCard() {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: const Color(0xffEAF3FF),
+        color: const Color(0xFFEAF3FF),
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: const Color(0xffCFE1F7), width: 1.4),
+        border: Border.all(color: const Color(0xFFCFE1F7), width: 1.4),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.035),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -689,21 +486,21 @@ class _AddHealthDataScreenState extends State<AddHealthDataScreen> {
                 backgroundColor: Colors.white,
                 child: Icon(
                   isListening ? Icons.hearing_rounded : Icons.mic_rounded,
-                  color: dark,
+                  color: primaryColor,
                   size: 32,
                 ),
               ),
               const SizedBox(width: 14),
               Expanded(
                 child: Text(
-                  isListening
-                      ? 'أنا أسمع... احكي كل القراءات ثم اضغطي إيقاف'
-                      : 'إدخال القراءة بالصوت',
+                  isListening ? 'أنا أسمعك الآن' : 'إدخال بالصوت',
                   textAlign: TextAlign.right,
                   style: const TextStyle(
                     fontSize: 24,
                     fontWeight: FontWeight.w900,
+                    fontFamily: 'Cairo',
                     color: dark,
+                    height: 1.3,
                   ),
                 ),
               ),
@@ -711,12 +508,13 @@ class _AddHealthDataScreenState extends State<AddHealthDataScreen> {
           ),
           const SizedBox(height: 10),
           const Text(
-            'اضغطي واحكي مثلًا: نبضي 75، ضغطي 120 على 80، سكري 100، الأكسجين 98، الحرارة 37.',
+            'قل مثلاً: نبضي 75، ضغطي 120 على 80، سكري 100، أكسجيني 98، حرارتي 37.',
             textAlign: TextAlign.right,
             style: TextStyle(
               fontSize: 17,
               fontWeight: FontWeight.w700,
-              color: Color(0xff4B5563),
+              fontFamily: 'Cairo',
+              color: secondaryTextColor,
               height: 1.5,
             ),
           ),
@@ -728,19 +526,21 @@ class _AddHealthDataScreenState extends State<AddHealthDataScreen> {
             icon: Icon(
               isListening ? Icons.hearing_rounded : Icons.mic_rounded,
               color: Colors.white,
-              size: 30,
+              size: 28,
             ),
             label: Text(
-              isListening ? 'إيقاف وإدخال القراءات' : 'اضغطي واحكي القراءات',
+              isListening ? 'إيقاف وإدخال القراءات' : 'اضغط وتكلم',
               style: const TextStyle(
-                fontSize: 20,
+                fontSize: 21,
                 fontWeight: FontWeight.w900,
+                fontFamily: 'Cairo',
                 color: Colors.white,
               ),
             ),
             style: ElevatedButton.styleFrom(
-              backgroundColor: dark,
+              backgroundColor: primaryColor,
               minimumSize: const Size(double.infinity, 58),
+              elevation: 2,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(18),
               ),
@@ -758,17 +558,11 @@ class _AddHealthDataScreenState extends State<AddHealthDataScreen> {
       await _speak(
         'يجب السماح باستخدام المايك حتى أستطيع تسجيل القراءة بالصوت',
       );
+
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'يجب السماح بصلاحية المايك',
-              textAlign: TextAlign.right,
-              style: TextStyle(fontSize: 18),
-            ),
-          ),
-        );
+        _showSnack('يجب السماح بصلاحية المايك', color: warningColor);
       }
+
       return;
     }
 
@@ -795,36 +589,32 @@ class _AddHealthDataScreenState extends State<AddHealthDataScreen> {
     }
 
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          duration: Duration(seconds: 5),
-          content: Text(
-            'أنا أسمع الآن... احكي كل القراءات، ولما تخلصي اضغطي زر إيقاف وإدخال القراءات',
-            textAlign: TextAlign.right,
-            style: TextStyle(fontSize: 17),
-          ),
-        ),
+      _showSnack(
+        'أنا أسمع الآن... قل القراءات، ثم اضغط إيقاف',
+        color: primaryColor,
       );
     }
 
     await _speech.listen(
       localeId: localeId,
-      listenFor: const Duration(seconds: 45),
-      pauseFor: const Duration(seconds: 10),
+      listenFor: const Duration(seconds: 35),
+      pauseFor: const Duration(seconds: 8),
       partialResults: true,
       listenMode: stt.ListenMode.dictation,
       cancelOnError: false,
       onResult: (result) {
         final heard = result.recognizedWords.trim();
+
         if (heard.isNotEmpty && heard.length >= lastVoiceText.length) {
           lastVoiceText = heard;
         }
+
         debugPrint('Health voice heard: $lastVoiceText');
       },
     );
 
-    // لو المستخدم ما ضغط إيقاف، نعطيه وقت طويل وبعدين نعالج الكلام تلقائيًا.
-    await Future.delayed(const Duration(seconds: 45));
+    await Future.delayed(const Duration(seconds: 35));
+
     if (isListening) {
       await _finishVoiceListening();
     }
@@ -848,7 +638,7 @@ class _AddHealthDataScreenState extends State<AddHealthDataScreen> {
     final spokenText = lastVoiceText.trim();
 
     if (spokenText.isEmpty) {
-      await _speak('لم أسمع القراءة، حاولي مرة أخرى');
+      await _speak('لم أسمع القراءة، حاول مرة أخرى');
       return;
     }
 
@@ -856,23 +646,15 @@ class _AddHealthDataScreenState extends State<AddHealthDataScreen> {
 
     if (!mounted) return;
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        backgroundColor: filledCount > 0 ? green : Colors.orange,
-        content: Text(
-          filledCount > 0
-              ? 'تم تعبئة $filledCount قراءة بالصوت'
-              : 'لم أفهم الأرقام، حاولي قول: نبضي 75، ضغطي 120 على 80، سكري 100',
-          textAlign: TextAlign.right,
-          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-        ),
-      ),
-    );
-
     if (filledCount > 0) {
+      _showSnack('تم تعبئة $filledCount قراءة بالصوت', color: green);
       await _speak('تم تعبئة القراءات التي سمعتها');
     } else {
-      await _speak('لم أفهم القراءات. حاولي مرة أخرى بوضوح');
+      _showSnack(
+        'لم أفهم الأرقام. قل مثلًا: نبضي 75، ضغطي 120 على 80، أكسجيني 98، حرارتي 37',
+        color: warningColor,
+      );
+      await _speak('لم أفهم القراءات. حاول مرة أخرى بوضوح');
     }
   }
 
@@ -915,10 +697,17 @@ class _AddHealthDataScreenState extends State<AddHealthDataScreen> {
     }
 
     final oxygen = _firstNumberAfterAny(text, [
+      'نسبة الاكسجين',
+      'نسبه الاكسجين',
       'الاكسجين',
       'اكسجين',
       'الأكسجين',
       'اوكسجين',
+      'تشبع الاكسجين',
+      'تشبع الأكسجين',
+      'اكسجيني',
+      'أكسجيني',
+      'اوكسجيني',
     ]);
 
     if (oxygen != null) {
@@ -927,13 +716,14 @@ class _AddHealthDataScreenState extends State<AddHealthDataScreen> {
     }
 
     final temperature = _firstNumberAfterAny(text, [
+      'درجة الحرارة',
+      'درجة الحراره',
       'حرارتي',
       'الحراره',
       'الحرارة',
       'حراره',
       'حرارة',
-      'درجة الحراره',
-      'درجة الحرارة',
+      'حرارته',
     ], allowDecimal: true);
 
     if (temperature != null) {
@@ -950,13 +740,19 @@ class _AddHealthDataScreenState extends State<AddHealthDataScreen> {
     List<String> keywords, {
     bool allowDecimal = false,
   }) {
+    final numberPattern = allowDecimal
+        ? r'(\d{1,3}(?:[\.,]\d+)?)'
+        : r'(\d{1,3})';
+
     for (final keyword in keywords) {
       final normalizedKeyword = _normalizeVoiceText(keyword);
-      final pattern = allowDecimal
-          ? RegExp('$normalizedKeyword\\s*(\\d{1,3}(?:[\\.,]\\d+)?)')
-          : RegExp('$normalizedKeyword\\s*(\\d{1,3})');
+
+      final pattern = RegExp(
+        '$normalizedKeyword\\s+(?:[^\\d\\s]+\\s+){0,3}$numberPattern',
+      );
 
       final match = pattern.firstMatch(text);
+
       if (match != null) {
         return match.group(1)!.replaceAll(',', '.');
       }
@@ -1002,9 +798,9 @@ class _AddHealthDataScreenState extends State<AddHealthDataScreen> {
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
-        backgroundColor: Colors.white,
+        backgroundColor: backgroundColor,
         appBar: AppBar(
-          backgroundColor: Colors.white,
+          backgroundColor: backgroundColor,
           elevation: 0,
           centerTitle: true,
           automaticallyImplyLeading: false,
@@ -1015,98 +811,152 @@ class _AddHealthDataScreenState extends State<AddHealthDataScreen> {
             icon: const Icon(
               Icons.arrow_back_ios_new_rounded,
               color: dark,
-              size: 28,
+              size: 26,
             ),
           ),
           title: const Text(
             'إضافة قراءة صحية',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: TextStyle(
               color: dark,
-              fontSize: 34,
+              fontSize: 26,
               fontWeight: FontWeight.w900,
+              fontFamily: 'Cairo',
             ),
           ),
         ),
-        body: SingleChildScrollView(
-          padding: const EdgeInsets.all(18),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const Text(
-                'سيتم حفظ القراءة بتاريخ اليوم',
-                textAlign: TextAlign.right,
-                style: TextStyle(
-                  fontSize: 30,
-                  fontWeight: FontWeight.w700,
-                  color: dark,
-                ),
-              ),
-              const SizedBox(height: 18),
-              _voiceHealthInputCard(),
-              const SizedBox(height: 18),
-              _watchImportCard(),
-              const SizedBox(height: 28),
-              _inputField(
-                controller: heartRateController,
-                label: 'نبض القلب',
-                hint: 'مثال: 75',
-              ),
-              const SizedBox(height: 18),
-              _inputField(
-                controller: systolicController,
-                label: 'الضغط الانقباضي',
-                hint: 'مثال: 120',
-              ),
-              const SizedBox(height: 18),
-              _inputField(
-                controller: diastolicController,
-                label: 'الضغط الانبساطي',
-                hint: 'مثال: 80',
-              ),
-              const SizedBox(height: 18),
-              _inputField(
-                controller: glucoseController,
-                label: 'مستوى السكر',
-                hint: 'مثال: 100',
-              ),
-              const SizedBox(height: 18),
-              _inputField(
-                controller: oxygenController,
-                label: 'نسبة الأكسجين',
-                hint: 'مثال: 98',
-              ),
-              const SizedBox(height: 18),
-              _inputField(
-                controller: temperatureController,
-                label: 'درجة الحرارة',
-                hint: 'مثال: 37',
-              ),
-              const SizedBox(height: 36),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: isLoading ? null : saveHealthData,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: green,
-                    minimumSize: const Size(double.infinity, 76),
-                    elevation: 4,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(24),
+        body: SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    'أدخل قراءاتك الصحية لليوم',
+                    textAlign: TextAlign.center,
+                    maxLines: 1,
+                    style: TextStyle(
+                      fontSize: 23,
+                      fontWeight: FontWeight.w900,
+                      fontFamily: 'Cairo',
+                      color: dark,
+                      height: 1.3,
                     ),
                   ),
-                  child: isLoading
-                      ? const CircularProgressIndicator(color: Colors.white)
-                      : const Text(
-                          'حفظ القراءة',
-                          style: TextStyle(
-                            fontSize: 30,
-                            fontWeight: FontWeight.w900,
-                            color: Colors.white,
-                          ),
-                        ),
                 ),
-              ),
-            ],
+
+                const SizedBox(height: 6),
+
+                const Text(
+                  'يمكنك إدخال القراءات يدوياً أو بالصوت',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                    fontFamily: 'Cairo',
+                    color: secondaryTextColor,
+                    height: 1.5,
+                  ),
+                ),
+
+                const SizedBox(height: 18),
+
+                _voiceHealthInputCard(),
+
+                const SizedBox(height: 24),
+
+                _inputField(
+                  controller: heartRateController,
+                  label: 'نبض القلب',
+                  hint: 'مثال: 75',
+                ),
+
+                const SizedBox(height: 16),
+
+                _inputField(
+                  controller: systolicController,
+                  label: 'الضغط الانقباضي',
+                  hint: 'مثال: 120',
+                ),
+
+                const SizedBox(height: 16),
+
+                _inputField(
+                  controller: diastolicController,
+                  label: 'الضغط الانبساطي',
+                  hint: 'مثال: 80',
+                ),
+
+                const SizedBox(height: 16),
+
+                _inputField(
+                  controller: glucoseController,
+                  label: 'مستوى السكر',
+                  hint: 'مثال: 100',
+                ),
+
+                const SizedBox(height: 16),
+
+                _inputField(
+                  controller: oxygenController,
+                  label: 'نسبة الأكسجين',
+                  hint: 'مثال: 98',
+                ),
+
+                const SizedBox(height: 16),
+
+                _inputField(
+                  controller: temperatureController,
+                  label: 'درجة الحرارة',
+                  hint: 'مثال: 37',
+                ),
+
+                const SizedBox(height: 32),
+
+                SizedBox(
+                  width: double.infinity,
+                  height: 64,
+                  child: ElevatedButton.icon(
+                    onPressed: isLoading ? null : saveHealthData,
+                    icon: isLoading
+                        ? const SizedBox(
+                            width: 24,
+                            height: 24,
+                            child: CircularProgressIndicator(
+                              color: Colors.white,
+                              strokeWidth: 2.6,
+                            ),
+                          )
+                        : const Icon(
+                            Icons.check_circle,
+                            color: Colors.white,
+                            size: 28,
+                          ),
+                    label: Text(
+                      isLoading ? 'جاري الحفظ...' : 'حفظ القراءة',
+                      style: const TextStyle(
+                        fontSize: 23,
+                        fontWeight: FontWeight.w900,
+                        fontFamily: 'Cairo',
+                        color: Colors.white,
+                      ),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: green,
+                      elevation: 3,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 24),
+              ],
+            ),
           ),
         ),
       ),
@@ -1118,46 +968,64 @@ class _AddHealthDataScreenState extends State<AddHealthDataScreen> {
     required String label,
     required String hint,
   }) {
-    return TextField(
-      controller: controller,
-      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-      textAlign: TextAlign.right,
-      style: const TextStyle(
-        fontSize: 32,
-        fontWeight: FontWeight.w900,
-        color: dark,
+    return Container(
+      decoration: BoxDecoration(
+        color: cardColor,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: border, width: 1.4),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.025),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
-      decoration: InputDecoration(
-        labelText: label,
-        hintText: hint,
-        floatingLabelBehavior: FloatingLabelBehavior.always,
-        labelStyle: const TextStyle(
-          fontSize: 30,
-          fontWeight: FontWeight.w900,
+      child: TextField(
+        controller: controller,
+        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        textAlign: TextAlign.right,
+        textInputAction: TextInputAction.next,
+        style: const TextStyle(
+          fontSize: 26,
+          fontWeight: FontWeight.w800,
+          fontFamily: 'Cairo',
           color: dark,
         ),
-        hintStyle: TextStyle(
-          fontSize: 24,
-          fontWeight: FontWeight.w500,
-          color: dark.withOpacity(0.35),
-        ),
-        filled: true,
-        fillColor: fieldBg,
-        contentPadding: const EdgeInsets.symmetric(
-          vertical: 32,
-          horizontal: 24,
-        ),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(24),
-          borderSide: const BorderSide(color: border, width: 2),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(24),
-          borderSide: const BorderSide(color: border, width: 2),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(24),
-          borderSide: const BorderSide(color: green, width: 3),
+        decoration: InputDecoration(
+          labelText: label,
+          hintText: hint,
+          floatingLabelBehavior: FloatingLabelBehavior.always,
+          labelStyle: const TextStyle(
+            fontSize: 24,
+            fontWeight: FontWeight.w900,
+            fontFamily: 'Cairo',
+            color: dark,
+          ),
+          hintStyle: const TextStyle(
+            fontSize: 21,
+            fontWeight: FontWeight.w600,
+            fontFamily: 'Cairo',
+            color: hintColor,
+          ),
+          filled: true,
+          fillColor: fieldBg,
+          contentPadding: const EdgeInsets.symmetric(
+            vertical: 22,
+            horizontal: 20,
+          ),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(22),
+            borderSide: BorderSide.none,
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(22),
+            borderSide: BorderSide.none,
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(22),
+            borderSide: const BorderSide(color: green, width: 2),
+          ),
         ),
       ),
     );

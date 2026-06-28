@@ -25,12 +25,12 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
   final TextEditingController notesController = TextEditingController();
 
   String selectedDose = 'حبة واحدة';
-  String selectedFrequency = 'مرة يوميًا';
+  String selectedFrequency = 'مرة يومياً';
   String selectedPeriod = 'بعد الأكل';
   String selectedDuration = 'أسبوع';
   String selectedImportance = 'مهم';
 
-  String selectedTime1 = '08:00 صباحًا';
+  String selectedTime1 = '08:00 صباحاً';
   String selectedTime2 = '08:00 مساءً';
   String selectedTime3 = '02:00 مساءً';
 
@@ -51,20 +51,20 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
   ];
 
   final List<String> times = const [
-    '06:00 صباحًا',
-    '06:30 صباحًا',
-    '07:00 صباحًا',
-    '07:30 صباحًا',
-    '08:00 صباحًا',
-    '08:30 صباحًا',
-    '09:00 صباحًا',
-    '09:30 صباحًا',
-    '10:00 صباحًا',
-    '10:30 صباحًا',
-    '11:00 صباحًا',
-    '11:30 صباحًا',
-    '12:00 ظهرًا',
-    '12:30 ظهرًا',
+    '06:00 صباحاً',
+    '06:30 صباحاً',
+    '07:00 صباحاً',
+    '07:30 صباحاً',
+    '08:00 صباحاً',
+    '08:30 صباحاً',
+    '09:00 صباحاً',
+    '09:30 صباحاً',
+    '10:00 صباحاً',
+    '10:30 صباحاً',
+    '11:00 صباحاً',
+    '11:30 صباحاً',
+    '12:00 ظهراً',
+    '12:30 ظهراً',
     '01:00 مساءً',
     '01:30 مساءً',
     '02:00 مساءً',
@@ -87,9 +87,9 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
   ];
 
   final List<String> frequencies = const [
-    'مرة يوميًا',
-    'مرتين يوميًا',
-    'ثلاث مرات يوميًا',
+    'مرة يومياً',
+    'مرتين يومياً',
+    'ثلاث مرات يومياً',
     'عند الحاجة',
   ];
 
@@ -109,7 +109,7 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
     'دائم',
   ];
 
-  final List<String> importanceLevels = const ['عادي', 'مهم', 'ضروري جدًا'];
+  final List<String> importanceLevels = const ['عادي', 'مهم', 'ضروري جداً'];
 
   @override
   void initState() {
@@ -179,7 +179,7 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
           const SizedBox(width: 14),
           const Expanded(
             child: Text(
-              'اضغطي على الصوت ليسمع المريض ملخص الدواء وموعده قبل الحفظ.',
+              'اضغط على الصوت ليسمع المريض ملخص الدواء وموعده قبل الحفظ.',
               textAlign: TextAlign.right,
               style: TextStyle(
                 fontSize: 18,
@@ -206,8 +206,8 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
 
   List<String> getSelectedTimes() {
     if (selectedFrequency == 'عند الحاجة') return [];
-    if (selectedFrequency == 'مرة يوميًا') return [selectedTime1];
-    if (selectedFrequency == 'مرتين يوميًا') {
+    if (selectedFrequency == 'مرة  يومياً') return [selectedTime1];
+    if (selectedFrequency == 'مرتين يومياً') {
       return [selectedTime1, selectedTime2];
     }
     return [selectedTime1, selectedTime3, selectedTime2];
@@ -1069,50 +1069,49 @@ class _AddMedicationScreenState extends State<AddMedicationScreen> {
       width: double.infinity,
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: const Color(0xFFEAF2FA),
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: const Color(0xFFD7E6F5), width: 1.2),
+        color: const Color(0xFFEAF3FF),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: const Color(0xFFC9D6E2), width: 1.2),
       ),
-      child: const Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'تذكير ذكي وآمن 💙',
+          Row(
+            textDirection: TextDirection.rtl,
+            children: const [
+              Icon(
+                Icons.notifications_active_rounded,
+                color: Color(0xFF1F4168),
+                size: 32,
+              ),
+              SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'تذكير ذكي وآمن',
                   textAlign: TextAlign.right,
                   style: TextStyle(
-                    fontSize: 21,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF1E3A5F),
+                    fontSize: 23,
+                    fontWeight: FontWeight.w900,
+                    color: Color(0xFF1F4168),
                     fontFamily: 'Cairo',
+                    height: 1.3,
                   ),
                 ),
-                SizedBox(height: 8),
-                Text(
-                  'قم بإضافة تفاصيل الدواء ليقوم تطبيق MyCare بتذكيرك بموعد الدواء بكل سهولة وأمان.',
-                  textAlign: TextAlign.right,
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w800,
-                    color: Colors.black,
-                    height: 1.6,
-                    fontFamily: 'Cairo',
-                  ),
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
-          SizedBox(width: 14),
-          CircleAvatar(
-            radius: 25,
-            backgroundColor: Color(0xFF1E3A5F),
-            child: Icon(
-              Icons.health_and_safety_rounded,
-              color: Colors.white,
-              size: 30,
+
+          const SizedBox(height: 10),
+
+          const Text(
+            'أدخل تفاصيل الدواء ليتم تذكير المريض بموعده بسهولة وأمان.',
+            textAlign: TextAlign.right,
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w700,
+              color: Colors.black,
+              height: 1.6,
+              fontFamily: 'Cairo',
             ),
           ),
         ],

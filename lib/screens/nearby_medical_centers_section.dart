@@ -18,10 +18,12 @@ class NearbyMedicalCentersSection extends StatefulWidget {
   });
 
   @override
-  State<NearbyMedicalCentersSection> createState() => _NearbyMedicalCentersSectionState();
+  State<NearbyMedicalCentersSection> createState() =>
+      _NearbyMedicalCentersSectionState();
 }
 
-class _NearbyMedicalCentersSectionState extends State<NearbyMedicalCentersSection> {
+class _NearbyMedicalCentersSectionState
+    extends State<NearbyMedicalCentersSection> {
   late Future<List<MedicalCenter>> _futureCenters;
   final MedicalCentersService _service = MedicalCentersService();
 
@@ -69,7 +71,10 @@ class _NearbyMedicalCentersSectionState extends State<NearbyMedicalCentersSectio
                   const SizedBox(width: 8),
                   Text(
                     widget.title,
-                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ],
               ),
@@ -94,7 +99,9 @@ class _NearbyMedicalCentersSectionState extends State<NearbyMedicalCentersSectio
                   }
 
                   return Column(
-                    children: centers.map((center) => _buildCenterTile(center)).toList(),
+                    children: centers
+                        .map((center) => _buildCenterTile(center))
+                        .toList(),
                   );
                 },
               ),
@@ -124,17 +131,25 @@ class _NearbyMedicalCentersSectionState extends State<NearbyMedicalCentersSectio
           Row(
             children: [
               Icon(
-                center.category == 'Hospital' ? Icons.local_hospital : Icons.medical_services,
+                center.category == 'Hospital'
+                    ? Icons.local_hospital
+                    : Icons.medical_services,
                 color: center.category == 'Hospital' ? Colors.red : Colors.blue,
               ),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
                   center.name,
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 15,
+                  ),
                 ),
               ),
-              Text(distance, style: const TextStyle(fontWeight: FontWeight.w600)),
+              Text(
+                distance,
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
             ],
           ),
           const SizedBox(height: 5),

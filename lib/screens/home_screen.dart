@@ -179,131 +179,127 @@ class _HomeScreenState extends State<HomeScreen> {
     final name = (user['fullName'] ?? user['name'] ?? 'المستخدم').toString();
 
     return SafeArea(
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _header(name: name),
+      child: Column(
+        children: [
+          _header(name: name),
 
-            const SizedBox(height: 16),
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _voiceAssistantCard(context, uid, user),
 
-            _voiceAssistantCard(context, uid, user),
+                  const SizedBox(height: 24),
 
-            const SizedBox(height: 24),
+                  _patientHealthStatus(uid),
 
-            _patientHealthStatus(uid),
+                  const SizedBox(height: 24),
 
-            const SizedBox(height: 24),
+                  _sectionTitle('أدوية اليوم'),
 
-            _sectionTitle('أدوية اليوم'),
+                  const SizedBox(height: 16),
 
-            const SizedBox(height: 16),
+                  _medicationsList(uid),
 
-            _medicationsList(uid),
+                  const SizedBox(height: 24),
 
-            const SizedBox(height: 24),
-
-            _bigActionCard(
-              title: 'المعلومات الطبية',
-              icon: Icons.medical_information_outlined,
-              color: softOrange,
-              border: const Color(0xffF1DDC5),
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => MedicalInfoScreen(user: user),
+                  _bigActionCard(
+                    title: 'المعلومات الطبية',
+                    icon: Icons.medical_information_outlined,
+                    color: softOrange,
+                    border: const Color(0xffF1DDC5),
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => MedicalInfoScreen(user: user),
+                        ),
+                      );
+                    },
                   ),
-                );
-              },
-            ),
 
-            const SizedBox(height: 24),
+                  const SizedBox(height: 24),
 
-            _sectionTitle('خدمات سريعة'),
+                  _sectionTitle('خدمات سريعة'),
 
-            const SizedBox(height: 16),
+                  const SizedBox(height: 16),
 
-            Row(
-              children: [
-                Expanded(
-                  child:
-                      //  _serviceCard(
-                      //   title: 'أدويتي',
-                      //   icon: Icons.medication_liquid_rounded,
-                      //   color: warningColor,
-                      //   bgColor: const Color(0xffFFF1E7),
-                      //   onTap: () {},
-                      // ),
-                      _serviceCard(
-                        title: 'أدويتي',
-                        icon: Icons.medication_liquid_rounded,
-                        color: warningColor,
-                        bgColor: const Color(0xffFFF1E7),
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => const MedicationListScreen(),
-                            ),
-                          );
-                        },
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _serviceCard(
+                          title: 'أدويتي',
+                          icon: Icons.medication_liquid_rounded,
+                          color: warningColor,
+                          bgColor: const Color(0xffFFF1E7),
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const MedicationListScreen(),
+                              ),
+                            );
+                          },
+                        ),
                       ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: _serviceCard(
-                    title: 'صحتي',
-                    icon: Icons.monitor_heart_rounded,
-                    color: successColor,
-                    bgColor: softGreen,
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const AddHealthDataScreen(),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: _serviceCard(
+                          title: 'صحتي',
+                          icon: Icons.monitor_heart_rounded,
+                          color: successColor,
+                          bgColor: softGreen,
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const AddHealthDataScreen(),
+                              ),
+                            );
+                          },
                         ),
-                      );
-                    },
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: _serviceCard(
-                    title: 'تقاريري',
-                    icon: Icons.description_rounded,
-                    color: const Color(0xff407C99),
-                    bgColor: softBlue,
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => HealthHistoryReportsScreen(),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: _serviceCard(
+                          title: 'تقاريري',
+                          icon: Icons.description_rounded,
+                          color: const Color(0xff407C99),
+                          bgColor: softBlue,
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => HealthHistoryReportsScreen(),
+                              ),
+                            );
+                          },
                         ),
-                      );
-                    },
+                      ),
+                    ],
                   ),
-                ),
-              ],
+
+                  const SizedBox(height: 24),
+
+                  _smartDailyCareSection(context),
+
+                  const SizedBox(height: 24),
+
+                  const NearbyMedicalCentersSection(
+                    title: 'أقرب المراكز الطبية',
+                    limit: 5,
+                  ),
+
+                  const SizedBox(height: 24),
+
+                  _sosButton(context, uid, user),
+                ],
+              ),
             ),
-
-            const SizedBox(height: 24),
-
-            _smartDailyCareSection(context),
-
-            const SizedBox(height: 24),
-
-            const NearbyMedicalCentersSection(
-              title: 'أقرب المراكز الطبية',
-              limit: 5,
-            ),
-
-            const SizedBox(height: 24),
-
-            _sosButton(context, uid, user),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -313,26 +309,13 @@ class _HomeScreenState extends State<HomeScreen> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _sectionTitle('رعاية يومية ذكية'),
+
         const SizedBox(height: 16),
+
         _moodQuickCard(context),
+
         const SizedBox(height: 14),
-        _smartFeatureCard(
-          title: 'الساعة الذكية',
-          subtitle: 'استيراد النبض والأكسجين والحرارة من الساعة',
-          icon: Icons.watch_rounded,
-          color: primaryColor,
-          bgColor: softBlue,
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) =>
-                    const AddHealthDataScreen(autoImportFromWatch: true),
-              ),
-            );
-          },
-        ),
-        const SizedBox(height: 14),
+
         Row(
           children: [
             Expanded(
@@ -350,11 +333,13 @@ class _HomeScreenState extends State<HomeScreen> {
                 },
               ),
             ),
+
             const SizedBox(width: 12),
+
             Expanded(
               child: _smartFeatureCard(
                 title: 'مواعيدي',
-                subtitle: 'تذكير موعد الطبيب',
+                subtitle: 'موعد الطبيب',
                 icon: Icons.calendar_month_rounded,
                 color: warningColor,
                 bgColor: softOrange,
@@ -370,10 +355,12 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ],
         ),
-        const SizedBox(height: 12),
+
+        const SizedBox(height: 14),
+
         _smartFeatureCard(
           title: 'خط الرعاية اليومي',
-          subtitle: 'كل أحداث اليوم: دواء، قراءة، مزاج، مواعيد',
+          subtitle: 'كل أحداث اليوم في مكان واحد',
           icon: Icons.timeline_rounded,
           color: primaryColor,
           bgColor: softBlue,
@@ -390,7 +377,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _moodQuickCard(BuildContext context) {
     return InkWell(
-      borderRadius: BorderRadius.circular(22),
+      borderRadius: BorderRadius.circular(26),
       onTap: () {
         Navigator.push(
           context,
@@ -398,49 +385,63 @@ class _HomeScreenState extends State<HomeScreen> {
         );
       },
       child: Container(
+        width: double.infinity,
         padding: const EdgeInsets.all(18),
         decoration: BoxDecoration(
           color: softPurple,
-          borderRadius: BorderRadius.circular(22),
-          border: Border.all(color: const Color(0xffE2DAF3)),
+          borderRadius: BorderRadius.circular(26),
+          border: Border.all(color: const Color(0xffE2DAF3), width: 1.2),
         ),
         child: Row(
+          textDirection: TextDirection.rtl,
           children: [
-            const CircleAvatar(
-              radius: 30,
-              backgroundColor: Colors.white,
-              child: Text('🙂', style: TextStyle(fontSize: 31)),
+            Container(
+              width: 62,
+              height: 62,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(22),
+              ),
+              child: const Center(
+                child: Text('🙂', style: TextStyle(fontSize: 34)),
+              ),
             ),
+
             const SizedBox(width: 14),
+
             const Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerRight,
+                  child: Text(
                     'كيف تشعر اليوم؟',
+                    textDirection: TextDirection.rtl,
                     textAlign: TextAlign.right,
+                    maxLines: 1,
                     style: TextStyle(
-                      fontSize: 22,
+                      fontSize: 23,
                       fontFamily: 'Cairo',
                       fontWeight: FontWeight.w900,
                       color: textColor,
+                      height: 1.3,
                     ),
                   ),
-                  SizedBox(height: 4),
-                  Text(
-                    'جيد، متعب، أو حزين — ويتم حفظها في التقرير',
-                    textAlign: TextAlign.right,
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontFamily: 'Cairo',
-                      fontWeight: FontWeight.w700,
-                      color: secondaryTextColor,
-                    ),
-                  ),
-                ],
+                ),
               ),
             ),
-            const Icon(Icons.arrow_back_ios_new_rounded, color: primaryColor),
+
+            SizedBox(width: 10),
+
+            Transform.scale(
+              scaleX: -1,
+              child: const Icon(
+                Icons.arrow_back_ios_new_rounded,
+                color: primaryColor,
+                size: 24,
+              ),
+            ),
           ],
         ),
       ),
@@ -466,44 +467,89 @@ class _HomeScreenState extends State<HomeScreen> {
           borderRadius: BorderRadius.circular(22),
           border: Border.all(color: color.withOpacity(0.18)),
         ),
-        child: Row(
-          children: [
-            CircleAvatar(
-              radius: 28,
-              backgroundColor: Colors.white,
-              child: Icon(icon, color: color, size: 32),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final bool isSmallCard = constraints.maxWidth < 220;
+
+            if (isSmallCard) {
+              return Column(
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Text(
-                    title,
-                    textAlign: TextAlign.right,
-                    style: const TextStyle(
-                      fontSize: 20,
-                      fontFamily: 'Cairo',
-                      fontWeight: FontWeight.w900,
-                      color: textColor,
-                    ),
+                  CircleAvatar(
+                    radius: 28,
+                    backgroundColor: Colors.white,
+                    child: Icon(icon, color: color, size: 32),
                   ),
-                  const SizedBox(height: 5),
-                  Text(
-                    subtitle,
-                    textAlign: TextAlign.right,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontFamily: 'Cairo',
-                      fontWeight: FontWeight.w700,
-                      color: secondaryTextColor,
-                      height: 1.4,
+
+                  const SizedBox(height: 10),
+
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      title,
+                      textDirection: TextDirection.rtl,
+                      textAlign: TextAlign.center,
+                      maxLines: 1,
+                      style: const TextStyle(
+                        fontSize: 23,
+                        fontFamily: 'Cairo',
+                        fontWeight: FontWeight.w900,
+                        color: textColor,
+                        height: 1.25,
+                      ),
                     ),
                   ),
                 ],
-              ),
-            ),
-          ],
+              );
+            }
+
+            return Row(
+              textDirection: TextDirection.rtl,
+              children: [
+                CircleAvatar(
+                  radius: 28,
+                  backgroundColor: Colors.white,
+                  child: Icon(icon, color: color, size: 32),
+                ),
+
+                const SizedBox(width: 12),
+
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Text(
+                        title,
+                        textDirection: TextDirection.rtl,
+                        textAlign: TextAlign.right,
+                        style: const TextStyle(
+                          fontSize: 20,
+                          fontFamily: 'Cairo',
+                          fontWeight: FontWeight.w900,
+                          color: textColor,
+                        ),
+                      ),
+
+                      const SizedBox(height: 5),
+
+                      Text(
+                        subtitle,
+                        textDirection: TextDirection.rtl,
+                        textAlign: TextAlign.right,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontFamily: 'Cairo',
+                          fontWeight: FontWeight.w700,
+                          color: secondaryTextColor,
+                          height: 1.4,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            );
+          },
         ),
       ),
     );
@@ -652,13 +698,13 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
           const SizedBox(height: 10),
           const Text(
-            'اضغط على المايك واحكي: افتح صحتي، روح على تقاريري، افتح أدويتي، افتح التنبيهات، اقرأ حالتي، أو ساعدني.',
+            'قل مثلاً: افتح صحتي، افتح أدويتي، اقرأ حالتي، أو ساعدني.',
             textAlign: TextAlign.right,
             style: TextStyle(
-              fontSize: 17,
+              fontSize: 18,
               fontFamily: 'Cairo',
               color: secondaryTextColor,
-              height: 1.5,
+              height: 1.6,
               fontWeight: FontWeight.w700,
             ),
           ),
@@ -673,7 +719,7 @@ class _HomeScreenState extends State<HomeScreen> {
               size: 30,
             ),
             label: Text(
-              _isListening ? 'استمع للأمر...' : 'اضغط واحكي الأمر',
+              _isListening ? 'أسمعك الآن...' : 'اضغط وتكلم',
               style: const TextStyle(
                 fontSize: 20,
                 fontFamily: 'Cairo',
@@ -958,7 +1004,7 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     await _speak(
-      'لم أفهم الأمر. يمكنك قول افتح صحتي أو روح على تقاريري أو افتح أدويتي',
+      'لم أسمع الأمر بوضوح. قل مثلًا: افتح صحتي، افتح أدويتي، اقرأ حالتي، أو ساعدني.',
     );
   }
 
@@ -1192,35 +1238,78 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _header({required String name}) {
-    return Row(
-      children: [
-        Expanded(
-          child: Text(
-            'مرحباً $name',
-            textAlign: TextAlign.right,
-            style: const TextStyle(
-              fontSize: 26,
-              fontFamily: 'Cairo',
-              fontWeight: FontWeight.bold,
-              color: textColor,
+    final cleanName = name.trim();
+    final firstName = cleanName.isEmpty
+        ? 'المستخدم'
+        : cleanName.split(RegExp(r'\s+')).first;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
+      decoration: BoxDecoration(
+        color: const Color(0xFFEAF3FF),
+        border: const Border(
+          bottom: BorderSide(color: Color(0xFFCFE1F7), width: 1.4),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.045),
+            blurRadius: 12,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Row(
+        textDirection: TextDirection.rtl,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  'أهلاً $firstName',
+                  textDirection: TextDirection.rtl,
+                  textAlign: TextAlign.right,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 30,
+                    fontFamily: 'Cairo',
+                    fontWeight: FontWeight.w900,
+                    color: textColor,
+                    height: 1.25,
+                  ),
+                ),
+
+                const SizedBox(height: 5),
+
+                const Text(
+                  'نتمنى لك يوماً صحياً ومطمئناً',
+                  textDirection: TextDirection.rtl,
+                  textAlign: TextAlign.right,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontFamily: 'Cairo',
+                    fontWeight: FontWeight.w800,
+                    color: secondaryTextColor,
+                    height: 1.35,
+                  ),
+                ),
+              ],
             ),
           ),
-        ),
-        Container(
-          width: 56,
-          height: 56,
-          decoration: BoxDecoration(
-            color: cardColor,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: borderColor),
+
+          const SizedBox(width: 14),
+
+          const CircleAvatar(
+            radius: 32,
+            backgroundColor: Colors.white,
+            child: Icon(Icons.person, size: 40, color: primaryColor),
           ),
-          child: const Icon(
-            Icons.notifications_none,
-            color: primaryColor,
-            size: 30,
-          ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
@@ -1270,50 +1359,161 @@ class _HomeScreenState extends State<HomeScreen> {
           glucose: glucose,
         );
 
+        final bool isDanger = status == 'خطر';
+        final bool isWarning = status == 'تحتاج متابعة';
+
+        final Color mainColor = isDanger
+            ? errorColor
+            : isWarning
+            ? warningColor
+            : successColor;
+
+        final Color bgColor = isDanger
+            ? const Color(0xFFFFF0F0)
+            : isWarning
+            ? const Color(0xFFFFF7ED)
+            : softGreen;
+
+        final Color border = isDanger
+            ? const Color(0xFFFFC9C9)
+            : isWarning
+            ? const Color(0xFFF6D3B0)
+            : const Color(0xffD9EBDD);
+
+        final IconData icon = isDanger
+            ? Icons.warning_amber_rounded
+            : isWarning
+            ? Icons.info_rounded
+            : Icons.verified_user_rounded;
+
         return Container(
-          padding: const EdgeInsets.all(20),
+          width: double.infinity,
+          padding: const EdgeInsets.all(18),
           decoration: BoxDecoration(
-            color: softGreen,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: const Color(0xffD9EBDD)),
+            color: bgColor,
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: border, width: 1.3),
           ),
-          child: Row(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const CircleAvatar(
-                radius: 34,
-                backgroundColor: Colors.white,
-                child: Icon(Icons.verified_user, color: successColor, size: 38),
+              Row(
+                textDirection: TextDirection.rtl,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        const Text(
+                          'الحالة الصحية',
+                          textDirection: TextDirection.rtl,
+                          textAlign: TextAlign.right,
+                          style: TextStyle(
+                            fontSize: 25,
+                            fontFamily: 'Cairo',
+                            fontWeight: FontWeight.w900,
+                            color: textColor,
+                            height: 1.3,
+                          ),
+                        ),
+
+                        const SizedBox(height: 4),
+
+                        Text(
+                          status,
+                          textDirection: TextDirection.rtl,
+                          textAlign: TextAlign.right,
+                          style: TextStyle(
+                            fontSize: 27,
+                            fontFamily: 'Cairo',
+                            fontWeight: FontWeight.w900,
+                            color: mainColor,
+                            height: 1.3,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(width: 14),
+
+                  Container(
+                    width: 64,
+                    height: 64,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(22),
+                      border: Border.all(
+                        color: mainColor.withOpacity(0.25),
+                        width: 1.2,
+                      ),
+                    ),
+                    child: Icon(icon, color: mainColor, size: 38),
+                  ),
+                ],
               ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'الحالة الصحية: $status',
-                      style: const TextStyle(
-                        fontSize: 22,
-                        fontFamily: 'Cairo',
-                        color: textColor,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'النبض: $heartRate | الضغط: $systolic/$diastolic | السكر: $glucose | الأكسجين: $oxygen | الحرارة: $temperature',
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontFamily: 'Cairo',
-                        color: secondaryTextColor,
-                      ),
-                    ),
-                  ],
-                ),
+
+              const SizedBox(height: 16),
+
+              Wrap(
+                alignment: WrapAlignment.end,
+                spacing: 10,
+                runSpacing: 10,
+                children: [
+                  _healthValueBox('النبض', '$heartRate'),
+                  _healthValueBox('الضغط', '$systolic/$diastolic'),
+                  _healthValueBox('السكر', '$glucose'),
+                  _healthValueBox('الأكسجين', '$oxygen'),
+                  _healthValueBox('الحرارة', temperature),
+                ],
               ),
             ],
           ),
         );
       },
+    );
+  }
+
+  Widget _healthValueBox(String title, String value) {
+    return Container(
+      width: 130,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: borderColor, width: 1.1),
+      ),
+      child: Column(
+        children: [
+          Text(
+            title,
+            textDirection: TextDirection.rtl,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              fontSize: 16,
+              fontFamily: 'Cairo',
+              fontWeight: FontWeight.w800,
+              color: secondaryTextColor,
+            ),
+          ),
+
+          const SizedBox(height: 4),
+
+          Text(
+            value,
+            textDirection: TextDirection.rtl,
+            textAlign: TextAlign.center,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              fontSize: 21,
+              fontFamily: 'Cairo',
+              fontWeight: FontWeight.w900,
+              color: textColor,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -1595,10 +1795,13 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
             ),
-            const Icon(
-              Icons.arrow_back_ios_new_rounded,
-              color: primaryColor,
-              size: 22,
+            Transform.scale(
+              scaleX: -1,
+              child: const Icon(
+                Icons.arrow_back_ios_new_rounded,
+                color: primaryColor,
+                size: 22,
+              ),
             ),
           ],
         ),

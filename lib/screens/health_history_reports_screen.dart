@@ -307,7 +307,7 @@ class HealthHistoryReportsScreen extends StatelessWidget {
                           title: 'متوسط السكر',
                           value: avgGlucose.toStringAsFixed(0),
                           icon: Icons.bloodtype_outlined,
-                          bgColor: softOrange,
+                          bgColor: const Color(0xFFEAF3FF),
                           iconColor: const Color(0xffD47443),
                         ),
                       ),
@@ -340,49 +340,20 @@ class HealthHistoryReportsScreen extends StatelessWidget {
   Widget _summaryCard(HealthReport latest, int count, int criticalCount) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(22),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: _statusBg(latest.status),
         borderRadius: BorderRadius.circular(26),
-        border: Border.all(color: border),
+        border: Border.all(color: border, width: 1.2),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
             children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'الحالة الصحية العامة',
-                      textAlign: TextAlign.right,
-                      style: TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.w800,
-                        color: dark,
-                        fontFamily: 'Cairo',
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      latest.status,
-                      textAlign: TextAlign.right,
-                      style: TextStyle(
-                        fontSize: 34,
-                        fontWeight: FontWeight.w900,
-                        color: _statusColor(latest.status),
-                        fontFamily: 'Cairo',
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 14),
               Container(
-                width: 70,
-                height: 70,
+                width: 62,
+                height: 62,
                 decoration: const BoxDecoration(
                   color: Colors.white,
                   shape: BoxShape.circle,
@@ -390,22 +361,121 @@ class HealthHistoryReportsScreen extends StatelessWidget {
                 child: Icon(
                   _statusIcon(latest.status),
                   color: _statusColor(latest.status),
-                  size: 42,
+                  size: 36,
+                ),
+              ),
+
+              const SizedBox(width: 14),
+
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    const FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerRight,
+                      child: Text(
+                        'الحالة الصحية العامة',
+                        maxLines: 1,
+                        textAlign: TextAlign.right,
+                        textDirection: TextDirection.rtl,
+                        style: TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.w900,
+                          color: dark,
+                          fontFamily: 'Cairo',
+                          height: 1.2,
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(height: 8),
+
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerRight,
+                      child: Text(
+                        latest.status,
+                        maxLines: 1,
+                        textAlign: TextAlign.right,
+                        textDirection: TextDirection.rtl,
+                        style: TextStyle(
+                          fontSize: 34,
+                          fontWeight: FontWeight.w900,
+                          color: _statusColor(latest.status),
+                          fontFamily: 'Cairo',
+                          height: 1.2,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 16),
-          _dateTimeLine('آخر تحديث', latest.date),
-          const SizedBox(height: 8),
-          Text(
-            'عدد القراءات: $count  |  الحالات الخطرة: $criticalCount',
-            textAlign: TextAlign.right,
-            style: const TextStyle(
-              fontSize: 19,
-              fontWeight: FontWeight.w800,
-              color: dark,
-              fontFamily: 'Cairo',
+
+          const SizedBox(height: 18),
+
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: border, width: 1.1),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Align(
+                  alignment: Alignment.centerRight,
+                  child: Text(
+                    'آخر تحديث:',
+                    textAlign: TextAlign.right,
+                    textDirection: TextDirection.rtl,
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w900,
+                      color: dark,
+                      fontFamily: 'Cairo',
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 7),
+
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: Text(
+                    'التاريخ: ${_formatDate(latest.date)}',
+                    textAlign: TextAlign.right,
+                    textDirection: TextDirection.rtl,
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800,
+                      color: dark,
+                      fontFamily: 'Cairo',
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 5),
+
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: Text(
+                    'الوقت: ${_formatTime(latest.date)}',
+                    textAlign: TextAlign.right,
+                    textDirection: TextDirection.rtl,
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800,
+                      color: dark,
+                      fontFamily: 'Cairo',
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ],
@@ -414,45 +484,68 @@ class HealthHistoryReportsScreen extends StatelessWidget {
   }
 
   Widget _evaluationCard(String status) {
+    final bool isDanger = status == 'خطر';
+    final bool isWarning = status == 'تحتاج متابعة';
+
+    final String title = isDanger
+        ? 'تقييم الحالة الصحية'
+        : isWarning
+        ? 'تقييم الحالة الصحية'
+        : 'تقييم الحالة الصحية';
+
+    final String message = isDanger
+        ? 'تم اكتشاف قراءة خطيرة. يفضّل مراجعة الطبيب أو طلب المساعدة الطبية.'
+        : isWarning
+        ? 'توجد قراءة تحتاج متابعة خلال اليوم. راقب القراءات وأعد القياس لاحقًا.'
+        : 'الحالة مستقرة حالياً. استمر بمتابعة صحتك بانتظام.';
+
+    final Color mainColor = isDanger
+        ? Colors.red
+        : isWarning
+        ? const Color(0xFF1F4168)
+        : green;
+
+    final Color bgColor = isDanger
+        ? softRed
+        : isWarning
+        ? const Color(0xFFEAF3FF)
+        : softGreen;
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: softBlue,
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: border),
+        color: bgColor,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: border, width: 1.2),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Expanded(
-            child: Text(
-              status == 'خطر'
-                  ? 'تقييم الحالة الصحية: تم اكتشاف قراءة خطيرة، يفضّل مراجعة الطبيب.'
-                  : status == 'تحتاج متابعة'
-                  ? 'تقييم الحالة الصحية: توجد قراءة تحتاج متابعة خلال اليوم.'
-                  : 'تقييم الحالة الصحية: الحالة مستقرة حالياً.',
-              textAlign: TextAlign.right,
-              style: const TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.w800,
-                color: dark,
-                height: 1.5,
-                fontFamily: 'Cairo',
-              ),
+          Text(
+            title,
+            textAlign: TextAlign.right,
+            maxLines: 1,
+            style: TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.w900,
+              color: mainColor,
+              fontFamily: 'Cairo',
+              height: 1.3,
             ),
           ),
-          const SizedBox(width: 14),
-          Container(
-            width: 58,
-            height: 58,
-            decoration: const BoxDecoration(
-              color: Colors.white,
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(
-              Icons.psychology_alt_outlined,
-              color: Color(0xff407C99),
-              size: 34,
+
+          const SizedBox(height: 10),
+
+          Text(
+            message,
+            textAlign: TextAlign.right,
+            style: const TextStyle(
+              fontSize: 19,
+              fontWeight: FontWeight.w800,
+              color: dark,
+              height: 1.6,
+              fontFamily: 'Cairo',
             ),
           ),
         ],
@@ -466,9 +559,16 @@ class HealthHistoryReportsScreen extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: _statusBg(report.status),
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: border),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: border, width: 1.2),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.03),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -477,75 +577,94 @@ class HealthHistoryReportsScreen extends StatelessWidget {
             children: [
               Expanded(
                 child: Text(
-                  'الحالة: ${report.status}',
+                  'قراءة صحية',
                   textAlign: TextAlign.right,
+                  style: const TextStyle(
+                    fontSize: 23,
+                    fontWeight: FontWeight.w900,
+                    color: dark,
+                    fontFamily: 'Cairo',
+                    height: 1.3,
+                  ),
+                ),
+              ),
+
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 7,
+                ),
+                decoration: BoxDecoration(
+                  color: _statusBg(report.status),
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(
+                    color: _statusColor(report.status).withOpacity(0.25),
+                  ),
+                ),
+                child: Text(
+                  report.status,
+                  textAlign: TextAlign.center,
                   style: TextStyle(
-                    fontSize: 25,
+                    fontSize: 17,
                     fontWeight: FontWeight.w900,
                     color: _statusColor(report.status),
                     fontFamily: 'Cairo',
                   ),
                 ),
               ),
-              const SizedBox(width: 14),
-              Container(
-                width: 58,
-                height: 58,
-                decoration: const BoxDecoration(
-                  color: Colors.white,
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(
-                  _statusIcon(report.status),
-                  color: _statusColor(report.status),
-                  size: 34,
-                ),
-              ),
             ],
           ),
-          const SizedBox(height: 16),
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            children: [
-              _readingChip(
-                Icons.favorite,
-                'النبض',
-                report.heartRate.toString(),
-              ),
-              _readingChip(
-                Icons.bloodtype,
-                'الضغط',
-                '${report.systolic}/${report.diastolic}',
-              ),
-              _readingChip(
-                Icons.water_drop,
-                'السكر',
-                report.glucose.toString(),
-              ),
-              _readingChip(Icons.air, 'الأكسجين', report.oxygen.toString()),
-              _readingChip(
-                Icons.thermostat,
-                'الحرارة',
-                report.temperature.toStringAsFixed(1),
-              ),
-            ],
-          ),
+
           const SizedBox(height: 14),
+
           _dateTimeLine('التاريخ والوقت', report.date),
+
+          const SizedBox(height: 14),
+
+          _readingRow(
+            icon: Icons.favorite_rounded,
+            label: 'النبض',
+            value: report.heartRate.toString(),
+          ),
+
+          _readingRow(
+            icon: Icons.bloodtype_rounded,
+            label: 'الضغط',
+            value: '${report.systolic}/${report.diastolic}',
+          ),
+
+          _readingRow(
+            icon: Icons.water_drop_rounded,
+            label: 'السكر',
+            value: report.glucose.toString(),
+          ),
+
+          _readingRow(
+            icon: Icons.air_rounded,
+            label: 'الأكسجين',
+            value: report.oxygen.toString(),
+          ),
+
+          _readingRow(
+            icon: Icons.thermostat_rounded,
+            label: 'الحرارة',
+            value: report.temperature.toStringAsFixed(1),
+          ),
+
           const SizedBox(height: 12),
+
           SizedBox(
             width: double.infinity,
             child: OutlinedButton.icon(
               onPressed: () => _speak(_singleReportVoiceText(report)),
               style: OutlinedButton.styleFrom(
-                side: const BorderSide(color: dark, width: 1.4),
+                side: const BorderSide(color: dark, width: 1.3),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(16),
                 ),
                 padding: const EdgeInsets.symmetric(vertical: 13),
               ),
-              icon: const Icon(Icons.volume_up_rounded, color: dark),
+              icon: const Icon(Icons.volume_up_rounded, color: dark, size: 25),
               label: const Text(
                 'اسمع هذه القراءة',
                 style: TextStyle(
@@ -562,24 +681,44 @@ class HealthHistoryReportsScreen extends StatelessWidget {
     );
   }
 
-  Widget _readingChip(IconData icon, String label, String value) {
+  Widget _readingRow({
+    required IconData icon,
+    required String label,
+    required String value,
+  }) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      margin: const EdgeInsets.only(bottom: 9),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(15),
-        border: Border.all(color: border),
+        color: const Color(0xFFF7F9FC),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: border, width: 1.1),
       ),
       child: Row(
-        mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, color: dark, size: 22),
-          const SizedBox(width: 6),
+          Icon(icon, color: dark, size: 24),
+
+          const SizedBox(width: 10),
+
+          Expanded(
+            child: Text(
+              label,
+              textAlign: TextAlign.right,
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w900,
+                color: dark,
+                fontFamily: 'Cairo',
+              ),
+            ),
+          ),
+
           Text(
-            '$label: $value',
+            value,
+            textAlign: TextAlign.left,
             style: const TextStyle(
-              fontSize: 17,
-              fontWeight: FontWeight.w800,
+              fontSize: 21,
+              fontWeight: FontWeight.w900,
               color: dark,
               fontFamily: 'Cairo',
             ),
@@ -591,22 +730,58 @@ class HealthHistoryReportsScreen extends StatelessWidget {
 
   Widget _dateTimeLine(String title, DateTime date) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: border),
+        color: const Color(0xFFF7F9FC),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: border, width: 1.1),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Icon(Icons.calendar_month_rounded, color: dark, size: 22),
-          const SizedBox(width: 7),
-          Expanded(
+          Align(
+            alignment: Alignment.centerRight,
             child: Text(
-              '$title: ${_formatDate(date)}  •  ${_formatTime(date)}',
+              '$title:',
+              textDirection: TextDirection.rtl,
               textAlign: TextAlign.right,
               style: const TextStyle(
                 fontSize: 17,
+                fontWeight: FontWeight.w900,
+                color: dark,
+                fontFamily: 'Cairo',
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 6),
+
+          Align(
+            alignment: Alignment.centerRight,
+            child: Text(
+              'التاريخ: ${_formatDate(date)}',
+              textDirection: TextDirection.rtl,
+              textAlign: TextAlign.right,
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+                color: dark,
+                fontFamily: 'Cairo',
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 4),
+
+          Align(
+            alignment: Alignment.centerRight,
+            child: Text(
+              'الوقت: ${_formatTime(date)}',
+              textDirection: TextDirection.rtl,
+              textAlign: TextAlign.right,
+              style: const TextStyle(
+                fontSize: 18,
                 fontWeight: FontWeight.w800,
                 color: dark,
                 fontFamily: 'Cairo',
@@ -626,46 +801,63 @@ class HealthHistoryReportsScreen extends StatelessWidget {
     required Color iconColor,
   }) {
     return Container(
-      constraints: const BoxConstraints(minHeight: 126),
-      padding: const EdgeInsets.all(14),
+      constraints: const BoxConstraints(minHeight: 125),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
       decoration: BoxDecoration(
-        color: bgColor,
+        color: Colors.white,
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: border),
+        border: Border.all(color: border, width: 1.2),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.03),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
       ),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Container(
-            width: 48,
-            height: 48,
+            width: 46,
+            height: 46,
             decoration: BoxDecoration(
-              color: Colors.white,
-              shape: BoxShape.circle,
-              border: Border.all(color: iconColor.withOpacity(0.15)),
+              color: bgColor,
+              borderRadius: BorderRadius.circular(16),
             ),
             child: Icon(icon, color: iconColor, size: 28),
           ),
-          const SizedBox(height: 9),
+
+          const SizedBox(height: 10),
+
           Text(
             value,
             textAlign: TextAlign.center,
+            maxLines: 1,
             style: const TextStyle(
-              fontSize: 28,
+              fontSize: 30,
               fontWeight: FontWeight.w900,
               color: dark,
               fontFamily: 'Cairo',
+              height: 1.1,
             ),
           ),
-          const SizedBox(height: 4),
-          Text(
-            title,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w800,
-              color: dark,
-              fontFamily: 'Cairo',
+
+          const SizedBox(height: 6),
+
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              title,
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              style: const TextStyle(
+                fontSize: 17,
+                fontWeight: FontWeight.w900,
+                color: dark,
+                fontFamily: 'Cairo',
+                height: 1.2,
+              ),
             ),
           ),
         ],
@@ -733,13 +925,13 @@ class HealthHistoryReportsScreen extends StatelessWidget {
 
   Color _statusBg(String status) {
     if (status == 'خطر') return softRed;
-    if (status == 'تحتاج متابعة') return softOrange;
+    if (status == 'تحتاج متابعة') return const Color(0xFFEAF3FF);
     return softGreen;
   }
 
   Color _statusColor(String status) {
     if (status == 'خطر') return Colors.red;
-    if (status == 'تحتاج متابعة') return Colors.orange;
+    if (status == 'تحتاج متابعة') return const Color(0xFF1F4168);
     return green;
   }
 

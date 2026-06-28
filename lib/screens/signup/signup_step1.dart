@@ -12,11 +12,15 @@ class SignUpStep1 extends StatefulWidget {
 class _SignUpStep1State extends State<SignUpStep1> {
   // ================= COLORS =================
 
-  static const Color primaryColor = Color(0xFF1E3A5F);
-  static const Color backgroundColor = Color(0xFFF7F8FA);
+  static const Color primaryColor = Color(0xFF1F4168);
+  static const Color backgroundColor = Color(0xFFF7F9FC);
   static const Color cardColor = Color(0xFFFFFFFF);
-  static const Color textColor = Color(0xFF1F2937);
-  static const Color secondaryTextColor = Color(0xFF4B5563);
+  static const Color textColor = Color(0xFF111827);
+  static const Color secondaryTextColor = Color(0xFF374151);
+  static const Color hintColor = Color(0xFF6B7280);
+  static const Color borderColor = Color(0xFFC9D6E2);
+  static const Color selectedCardColor = Color(0xFFEFF4FB);
+
   static const Color warningColor = Color(0xFFED6C02);
   static const Color successColor = Color(0xFF2E7D32);
   static const Color errorColor = Color(0xFFD32F2F);
@@ -24,16 +28,11 @@ class _SignUpStep1State extends State<SignUpStep1> {
   // ================= CONTROLLERS =================
 
   final TextEditingController fullNameController = TextEditingController();
-
   final TextEditingController phoneController = TextEditingController();
-
   final TextEditingController emailController = TextEditingController();
-
   final TextEditingController passwordController = TextEditingController();
-
   final TextEditingController confirmPasswordController =
       TextEditingController();
-
   final TextEditingController ageController = TextEditingController();
 
   // ================= VARIABLES =================
@@ -154,11 +153,8 @@ class _SignUpStep1State extends State<SignUpStep1> {
           phone: phoneController.text.trim(),
           email: emailController.text.trim().toLowerCase(),
           password: passwordController.text.trim(),
-
           age: role == "مريض" ? ageController.text.trim() : "",
-
           gender: role == "مريض" ? gender ?? "" : "",
-
           relation: role == "مرافق" ? relation ?? "" : "",
         ),
       ),
@@ -178,14 +174,15 @@ class _SignUpStep1State extends State<SignUpStep1> {
         backgroundColor: color,
         behavior: SnackBarBehavior.floating,
         margin: const EdgeInsets.all(20),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
         content: Text(
           message,
           textAlign: TextAlign.right,
           style: const TextStyle(
             fontSize: 18,
             fontFamily: 'Cairo',
-            fontWeight: FontWeight.bold,
+            fontWeight: FontWeight.w700,
+            color: Colors.white,
           ),
         ),
         action: SnackBarAction(
@@ -197,7 +194,7 @@ class _SignUpStep1State extends State<SignUpStep1> {
     );
   }
 
-  // ================= INPUT =================
+  // ================= INPUT DECORATION =================
 
   InputDecoration inputDecoration({
     required String hint,
@@ -207,18 +204,27 @@ class _SignUpStep1State extends State<SignUpStep1> {
     return InputDecoration(
       hintText: hint,
       hintStyle: const TextStyle(
-        fontSize: 18,
+        fontSize: 19,
         fontFamily: 'Cairo',
-        color: secondaryTextColor,
+        color: hintColor,
+        fontWeight: FontWeight.w500,
       ),
-      prefixIcon: Icon(icon, color: primaryColor),
+      prefixIcon: Icon(icon, color: primaryColor, size: 28),
       suffixIcon: suffixIcon,
       filled: true,
       fillColor: cardColor,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(18),
+        borderSide: const BorderSide(color: borderColor, width: 1.3),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(18),
+        borderSide: const BorderSide(color: primaryColor, width: 2),
+      ),
       border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(16),
-        borderSide: BorderSide.none,
+        borderRadius: BorderRadius.circular(18),
+        borderSide: const BorderSide(color: borderColor, width: 1.3),
       ),
     );
   }
@@ -234,15 +240,17 @@ class _SignUpStep1State extends State<SignUpStep1> {
     Widget? suffixIcon,
   }) {
     return SizedBox(
-      height: 56,
+      height: 62,
       child: TextField(
         controller: controller,
         obscureText: isPassword,
         keyboardType: keyboardType,
+        textInputAction: TextInputAction.next,
         style: const TextStyle(
-          fontSize: 18,
+          fontSize: 20,
           fontFamily: 'Cairo',
           color: textColor,
+          fontWeight: FontWeight.w600,
         ),
         decoration: inputDecoration(
           hint: hint,
@@ -253,6 +261,60 @@ class _SignUpStep1State extends State<SignUpStep1> {
     );
   }
 
+  // ================= PAGE TITLE =================
+
+  Widget buildPageTitle() {
+    return const Text(
+      'إنشاء حساب جديد',
+      textAlign: TextAlign.center,
+      style: TextStyle(
+        fontSize: 34,
+        fontFamily: 'Cairo',
+        fontWeight: FontWeight.w900,
+        color: primaryColor,
+        height: 1.3,
+      ),
+    );
+  }
+
+  // ================= STEP INDICATOR =================
+
+  Widget buildStepIndicator() {
+    return Column(
+      children: [
+        Center(
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+            decoration: BoxDecoration(
+              color: cardColor,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: borderColor, width: 1),
+            ),
+            child: const Text(
+              'الخطوة 1 من 5',
+              style: TextStyle(
+                fontSize: 18,
+                fontFamily: 'Cairo',
+                color: secondaryTextColor,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: const LinearProgressIndicator(
+            value: 0.20,
+            minHeight: 10,
+            backgroundColor: Color(0xFFE5E7EB),
+            valueColor: AlwaysStoppedAnimation<Color>(primaryColor),
+          ),
+        ),
+      ],
+    );
+  }
+
   // ================= ROLE CARD =================
 
   Widget buildRoleCard({
@@ -260,42 +322,70 @@ class _SignUpStep1State extends State<SignUpStep1> {
     required String title,
     required IconData icon,
   }) {
-    return GestureDetector(
+    final bool isSelected = role == value;
+
+    return InkWell(
       onTap: () {
         setState(() {
           role = value;
         });
       },
+      borderRadius: BorderRadius.circular(22),
       child: Container(
-        padding: const EdgeInsets.all(20),
+        height: 88,
+        padding: const EdgeInsets.symmetric(horizontal: 20),
         decoration: BoxDecoration(
-          color: cardColor,
-          borderRadius: BorderRadius.circular(20),
+          color: isSelected ? selectedCardColor : cardColor,
+          borderRadius: BorderRadius.circular(22),
           border: Border.all(
-            color: role == value ? primaryColor : Colors.transparent,
-            width: 2,
+            color: isSelected ? primaryColor : borderColor,
+            width: isSelected ? 2 : 1.2,
           ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.035),
+              blurRadius: 10,
+              offset: const Offset(0, 3),
+            ),
+          ],
         ),
         child: Row(
           children: [
-            Icon(icon, color: primaryColor, size: 32),
+            Icon(icon, color: primaryColor, size: 34),
             const SizedBox(width: 16),
             Expanded(
               child: Text(
                 title,
+                textAlign: TextAlign.right,
                 style: const TextStyle(
-                  fontSize: 18,
+                  fontSize: 21,
                   fontFamily: 'Cairo',
-                  fontWeight: FontWeight.bold,
+                  fontWeight: FontWeight.w700,
                   color: textColor,
+                  height: 1.4,
                 ),
               ),
             ),
-            if (role == value)
-              const Icon(Icons.check_circle, color: successColor),
+            const SizedBox(width: 10),
+            Icon(
+              isSelected ? Icons.check_circle : Icons.circle_outlined,
+              color: isSelected ? successColor : borderColor,
+              size: 28,
+            ),
           ],
         ),
       ),
+    );
+  }
+
+  // ================= DROPDOWN STYLE =================
+
+  TextStyle get dropdownTextStyle {
+    return const TextStyle(
+      fontSize: 20,
+      fontFamily: 'Cairo',
+      color: textColor,
+      fontWeight: FontWeight.w600,
     );
   }
 
@@ -309,69 +399,44 @@ class _SignUpStep1State extends State<SignUpStep1> {
         backgroundColor: backgroundColor,
         body: SafeArea(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.all(20),
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const SizedBox(height: 16),
-
-                // ================= LOGO =================
-                const Text(
-                  'رعايتي ❤️',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 28,
-                    fontFamily: 'Cairo',
-                    fontWeight: FontWeight.bold,
-                    color: textColor,
-                  ),
-                ),
-
                 const SizedBox(height: 8),
 
-                const Text(
-                  'إنشاء حساب جديد',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontFamily: 'Cairo',
-                    fontWeight: FontWeight.w700,
-                    color: primaryColor,
-                  ),
-                ),
+                // ================= PAGE TITLE FIRST =================
+                buildPageTitle(),
 
-                const SizedBox(height: 4),
+                const SizedBox(height: 20),
+
+                // ================= STEP =================
+                buildStepIndicator(),
+
+                const SizedBox(height: 20),
 
                 const Text(
-                  'الخطوة 1 من 5',
+                  'يرجى اختيار نوع الحساب وإدخال البيانات الأساسية',
                   textAlign: TextAlign.center,
                   style: TextStyle(
-                    fontSize: 16,
+                    fontSize: 19,
                     fontFamily: 'Cairo',
+                    fontWeight: FontWeight.w600,
                     color: secondaryTextColor,
+                    height: 1.5,
                   ),
                 ),
 
-                const SizedBox(height: 24),
-
-                // ================= PROGRESS =================
-                LinearProgressIndicator(
-                  value: 0.2,
-                  minHeight: 8,
-                  borderRadius: BorderRadius.circular(20),
-                  backgroundColor: Colors.grey.shade300,
-                  color: primaryColor,
-                ),
-
-                const SizedBox(height: 24),
+                const SizedBox(height: 28),
 
                 // ================= ROLE =================
                 const Text(
                   'نوع الحساب',
+                  textAlign: TextAlign.right,
                   style: TextStyle(
-                    fontSize: 20,
+                    fontSize: 24,
                     fontFamily: 'Cairo',
-                    fontWeight: FontWeight.bold,
+                    fontWeight: FontWeight.w800,
                     color: textColor,
                   ),
                 ),
@@ -389,27 +454,36 @@ class _SignUpStep1State extends State<SignUpStep1> {
                 buildRoleCard(
                   value: "مرافق",
                   title: 'مرافق / فرد عائلة',
-                  icon: Icons.health_and_safety,
+                  icon: Icons.volunteer_activism,
                 ),
 
                 const SizedBox(height: 16),
 
-                buildRoleCard(
-                  value: "طبيب",
-                  title: 'طبيب',
-                  icon: Icons.medical_services,
-                ),
+                buildRoleCard(value: "طبيب", title: 'طبيب', icon: Icons.badge),
 
-                const SizedBox(height: 24),
+                const SizedBox(height: 28),
 
                 // ================= BASIC INFO =================
+                const Text(
+                  'البيانات الأساسية',
+                  textAlign: TextAlign.right,
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontFamily: 'Cairo',
+                    fontWeight: FontWeight.w800,
+                    color: textColor,
+                  ),
+                ),
+
+                const SizedBox(height: 16),
+
                 buildField(
                   controller: fullNameController,
                   hint: 'الاسم الكامل',
                   icon: Icons.person,
                 ),
 
-                const SizedBox(height: 16),
+                const SizedBox(height: 18),
 
                 buildField(
                   controller: phoneController,
@@ -418,7 +492,7 @@ class _SignUpStep1State extends State<SignUpStep1> {
                   keyboardType: TextInputType.phone,
                 ),
 
-                const SizedBox(height: 16),
+                const SizedBox(height: 18),
 
                 buildField(
                   controller: emailController,
@@ -427,7 +501,7 @@ class _SignUpStep1State extends State<SignUpStep1> {
                   keyboardType: TextInputType.emailAddress,
                 ),
 
-                const SizedBox(height: 16),
+                const SizedBox(height: 18),
 
                 buildField(
                   controller: passwordController,
@@ -442,12 +516,13 @@ class _SignUpStep1State extends State<SignUpStep1> {
                     },
                     icon: Icon(
                       showPassword ? Icons.visibility : Icons.visibility_off,
-                      color: secondaryTextColor,
+                      color: hintColor,
+                      size: 28,
                     ),
                   ),
                 ),
 
-                const SizedBox(height: 16),
+                const SizedBox(height: 18),
 
                 buildField(
                   controller: confirmPasswordController,
@@ -464,97 +539,127 @@ class _SignUpStep1State extends State<SignUpStep1> {
                       showConfirmPassword
                           ? Icons.visibility
                           : Icons.visibility_off,
-                      color: secondaryTextColor,
+                      color: hintColor,
+                      size: 28,
                     ),
                   ),
                 ),
 
-                const SizedBox(height: 16),
+                const SizedBox(height: 18),
 
                 // ================= PATIENT FIELDS =================
                 if (role == "مريض") ...[
                   buildField(
                     controller: ageController,
                     hint: 'العمر',
-                    icon: Icons.cake,
+                    icon: Icons.calendar_month,
                     keyboardType: TextInputType.number,
                   ),
 
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 18),
 
-                  DropdownButtonFormField<String>(
-                    initialValue: gender,
-                    decoration: inputDecoration(
-                      hint: 'الجنس',
-                      icon: Icons.person_2,
+                  SizedBox(
+                    height: 62,
+                    child: DropdownButtonFormField<String>(
+                      initialValue: gender,
+                      decoration: inputDecoration(
+                        hint: 'الجنس',
+                        icon: Icons.person_2,
+                      ),
+                      style: dropdownTextStyle,
+                      icon: const Icon(
+                        Icons.keyboard_arrow_down,
+                        color: primaryColor,
+                        size: 30,
+                      ),
+                      dropdownColor: cardColor,
+                      items: ['ذكر', 'أنثى']
+                          .map(
+                            (g) => DropdownMenuItem(
+                              value: g,
+                              child: Text(g, style: dropdownTextStyle),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: (value) {
+                        setState(() {
+                          gender = value;
+                        });
+                      },
                     ),
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontFamily: 'Cairo',
-                      color: textColor,
-                    ),
-                    items: ['ذكر', 'أنثى']
-                        .map((g) => DropdownMenuItem(value: g, child: Text(g)))
-                        .toList(),
-                    onChanged: (value) {
-                      setState(() {
-                        gender = value;
-                      });
-                    },
                   ),
+
+                  const SizedBox(height: 18),
                 ],
 
                 // ================= CAREGIVER FIELDS =================
                 if (role == "مرافق") ...[
-                  DropdownButtonFormField<String>(
-                    initialValue: relation,
-                    decoration: inputDecoration(
-                      hint: 'صلة القرابة',
-                      icon: Icons.family_restroom,
+                  SizedBox(
+                    height: 62,
+                    child: DropdownButtonFormField<String>(
+                      initialValue: relation,
+                      decoration: inputDecoration(
+                        hint: 'صلة القرابة',
+                        icon: Icons.family_restroom,
+                      ),
+                      style: dropdownTextStyle,
+                      icon: const Icon(
+                        Icons.keyboard_arrow_down,
+                        color: primaryColor,
+                        size: 30,
+                      ),
+                      dropdownColor: cardColor,
+                      items: relations
+                          .map(
+                            (r) => DropdownMenuItem(
+                              value: r,
+                              child: Text(r, style: dropdownTextStyle),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: (value) {
+                        setState(() {
+                          relation = value;
+                        });
+                      },
                     ),
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontFamily: 'Cairo',
-                      color: textColor,
-                    ),
-                    items: relations
-                        .map((r) => DropdownMenuItem(value: r, child: Text(r)))
-                        .toList(),
-                    onChanged: (value) {
-                      setState(() {
-                        relation = value;
-                      });
-                    },
                   ),
+
+                  const SizedBox(height: 18),
                 ],
 
-                const SizedBox(height: 32),
+                const SizedBox(height: 18),
 
                 // ================= NEXT BUTTON =================
                 SizedBox(
-                  height: 56,
+                  height: 62,
                   child: ElevatedButton.icon(
                     onPressed: goNext,
-                    icon: const Icon(Icons.arrow_forward, color: Colors.white),
+                    icon: const Icon(
+                      Icons.arrow_forward,
+                      color: Colors.white,
+                      size: 28,
+                    ),
                     label: const Text(
                       'التالي',
                       style: TextStyle(
-                        fontSize: 18,
+                        fontSize: 22,
                         fontFamily: 'Cairo',
-                        fontWeight: FontWeight.bold,
+                        fontWeight: FontWeight.w800,
                         color: Colors.white,
                       ),
                     ),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: primaryColor,
+                      elevation: 2,
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
+                        borderRadius: BorderRadius.circular(18),
                       ),
                     ),
                   ),
                 ),
 
-                const SizedBox(height: 24),
+                const SizedBox(height: 28),
               ],
             ),
           ),

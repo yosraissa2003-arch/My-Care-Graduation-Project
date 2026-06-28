@@ -76,11 +76,14 @@ class SignUpStep4 extends StatefulWidget {
 }
 
 class _SignUpStep4State extends State<SignUpStep4> {
-  static const Color primaryColor = Color(0xFF1E3A5F);
-  static const Color backgroundColor = Color(0xFFF7F8FA);
+  static const Color primaryColor = Color(0xFF1F4168);
+  static const Color backgroundColor = Color(0xFFF7F9FC);
   static const Color cardColor = Color(0xFFFFFFFF);
-  static const Color textColor = Color(0xFF1F2937);
-  static const Color secondaryTextColor = Color(0xFF4B5563);
+  static const Color textColor = Color(0xFF111827);
+  static const Color secondaryTextColor = Color(0xFF374151);
+  static const Color hintColor = Color(0xFF6B7280);
+  static const Color borderColor = Color(0xFFC9D6E2);
+
   static const Color warningColor = Color(0xFFED6C02);
   static const Color successColor = Color(0xFF2E7D32);
   static const Color errorColor = Color(0xFFD32F2F);
@@ -126,10 +129,6 @@ class _SignUpStep4State extends State<SignUpStep4> {
     return null;
   }
 
-  String generateEmailFromPhone(String normalizedPhone) {
-    return '$normalizedPhone@test.com';
-  }
-
   Future<void> showMessage(String message, {Color color = primaryColor}) async {
     await SystemSound.play(SystemSoundType.alert);
     HapticFeedback.mediumImpact();
@@ -141,14 +140,15 @@ class _SignUpStep4State extends State<SignUpStep4> {
         backgroundColor: color,
         behavior: SnackBarBehavior.floating,
         margin: const EdgeInsets.all(20),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
         content: Text(
           message,
           textAlign: TextAlign.right,
           style: const TextStyle(
             fontSize: 18,
             fontFamily: 'Cairo',
-            fontWeight: FontWeight.bold,
+            fontWeight: FontWeight.w700,
+            color: Colors.white,
           ),
         ),
         action: SnackBarAction(
@@ -167,7 +167,7 @@ class _SignUpStep4State extends State<SignUpStep4> {
       case 'weak-password':
         return 'كلمة المرور ضعيفة';
       case 'network-request-failed':
-        return 'تحققي من اتصال الإنترنت';
+        return 'تحقق من اتصال الإنترنت';
       case 'operation-not-allowed':
         return 'طريقة التسجيل غير مفعلة في Firebase';
       default:
@@ -217,7 +217,7 @@ class _SignUpStep4State extends State<SignUpStep4> {
 
     if (accountEmail.endsWith('@test.com')) {
       showMessage(
-        'استخدمي بريدًا إلكترونيًا حقيقيًا وليس تجريبيًا',
+        'استخدم بريدًا إلكترونيًا حقيقيًا وليس تجريبيًا',
         color: errorColor,
       );
       return;
@@ -314,7 +314,7 @@ class _SignUpStep4State extends State<SignUpStep4> {
             'sugar': widget.sugar.trim(),
             'heartRate': widget.heartRate.trim(),
             'remindersEnabled': widget.remindersEnabled,
-            'wearableEnabled': widget.wearableEnabled,
+            'wearableEnabled': false,
           },
         });
       }
@@ -401,24 +401,32 @@ class _SignUpStep4State extends State<SignUpStep4> {
     }
   }
 
-  InputDecoration inputDecoration({
-    required String hint,
-    required IconData icon,
-  }) {
+  InputDecoration inputDecoration({required String hint, IconData? icon}) {
     return InputDecoration(
       hintText: hint,
       hintStyle: const TextStyle(
-        fontSize: 18,
+        fontSize: 19,
         fontFamily: 'Cairo',
-        color: secondaryTextColor,
+        color: hintColor,
+        fontWeight: FontWeight.w500,
       ),
-      prefixIcon: Icon(icon, color: primaryColor),
+      prefixIcon: icon == null
+          ? null
+          : Icon(icon, color: primaryColor, size: 28),
       filled: true,
       fillColor: cardColor,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(18),
+        borderSide: const BorderSide(color: borderColor, width: 1.3),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(18),
+        borderSide: const BorderSide(color: primaryColor, width: 2),
+      ),
       border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(16),
-        borderSide: BorderSide.none,
+        borderRadius: BorderRadius.circular(18),
+        borderSide: const BorderSide(color: borderColor, width: 1.3),
       ),
     );
   }
@@ -426,20 +434,102 @@ class _SignUpStep4State extends State<SignUpStep4> {
   Widget buildField({
     required TextEditingController controller,
     required String hint,
-    required IconData icon,
+    IconData? icon,
     TextInputType keyboardType = TextInputType.text,
   }) {
     return SizedBox(
-      height: 56,
+      height: 62,
       child: TextField(
         controller: controller,
         keyboardType: keyboardType,
+        textInputAction: TextInputAction.next,
         style: const TextStyle(
-          fontSize: 18,
+          fontSize: 20,
           fontFamily: 'Cairo',
           color: textColor,
+          fontWeight: FontWeight.w600,
         ),
         decoration: inputDecoration(hint: hint, icon: icon),
+      ),
+    );
+  }
+
+  Widget buildPageTitle() {
+    return const Text(
+      'الطوارئ والصلاحيات',
+      textAlign: TextAlign.center,
+      style: TextStyle(
+        fontSize: 34,
+        fontFamily: 'Cairo',
+        fontWeight: FontWeight.w900,
+        color: primaryColor,
+        height: 1.3,
+      ),
+    );
+  }
+
+  Widget buildStepIndicator(bool isPatient) {
+    return Column(
+      children: [
+        Center(
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+            decoration: BoxDecoration(
+              color: cardColor,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: borderColor, width: 1),
+            ),
+            child: Text(
+              isPatient ? 'الخطوة 4 من 5' : 'الخطوة 4 من 4',
+              style: const TextStyle(
+                fontSize: 18,
+                fontFamily: 'Cairo',
+                color: secondaryTextColor,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: LinearProgressIndicator(
+            value: isPatient ? 0.80 : 1.0,
+            minHeight: 10,
+            backgroundColor: const Color(0xFFE5E7EB),
+            valueColor: const AlwaysStoppedAnimation<Color>(primaryColor),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget buildInfoCard() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: cardColor,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: borderColor, width: 1.2),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.035),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: const Text(
+        'أضف جهة اتصال للطوارئ، وفعّل الصلاحيات المهمة للتنبيهات والمساعدة.',
+        textAlign: TextAlign.center,
+        style: TextStyle(
+          fontSize: 22,
+          fontFamily: 'Cairo',
+          color: textColor,
+          fontWeight: FontWeight.w700,
+          height: 1.8,
+        ),
       ),
     );
   }
@@ -451,23 +541,70 @@ class _SignUpStep4State extends State<SignUpStep4> {
     required Function(bool) onChanged,
   }) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
       decoration: BoxDecoration(
         color: cardColor,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: borderColor, width: 1.2),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.035),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
       ),
       child: SwitchListTile(
         value: value,
         activeThumbColor: successColor,
         onChanged: onChanged,
-        secondary: Icon(icon, color: primaryColor),
+        secondary: Icon(icon, color: primaryColor, size: 34),
         title: Text(
           title,
+          textAlign: TextAlign.right,
           style: const TextStyle(
-            fontSize: 18,
+            fontSize: 23,
             fontFamily: 'Cairo',
             color: textColor,
-            fontWeight: FontWeight.w600,
+            fontWeight: FontWeight.w900,
+            height: 1.4,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget buildPrivacyCard() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      decoration: BoxDecoration(
+        color: cardColor,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: borderColor, width: 1.2),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.035),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: CheckboxListTile(
+        value: privacyAccepted,
+        activeColor: successColor,
+        onChanged: (value) {
+          setState(() => privacyAccepted = value ?? false);
+        },
+        controlAffinity: ListTileControlAffinity.leading,
+        title: const Text(
+          'أوافق على سياسة الخصوصية',
+          textAlign: TextAlign.right,
+          style: TextStyle(
+            fontSize: 23,
+            fontFamily: 'Cairo',
+            color: textColor,
+            fontWeight: FontWeight.w900,
+            height: 1.4,
           ),
         ),
       ),
@@ -484,76 +621,32 @@ class _SignUpStep4State extends State<SignUpStep4> {
         backgroundColor: backgroundColor,
         body: SafeArea(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.all(20),
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const SizedBox(height: 16),
-                const Text(
-                  'رعايتي ❤️',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 28,
-                    fontFamily: 'Cairo',
-                    fontWeight: FontWeight.bold,
-                    color: textColor,
-                  ),
-                ),
                 const SizedBox(height: 8),
-                const Text(
-                  'الطوارئ والصلاحيات',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 24,
-                    fontFamily: 'Cairo',
-                    fontWeight: FontWeight.bold,
-                    color: primaryColor,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  isPatient ? 'الخطوة 4 من 5' : 'الخطوة 4 من 4',
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontFamily: 'Cairo',
-                    color: secondaryTextColor,
-                  ),
-                ),
+
+                buildPageTitle(),
+
+                const SizedBox(height: 20),
+
+                buildStepIndicator(isPatient),
+
+                const SizedBox(height: 28),
+
+                buildInfoCard(),
+
                 const SizedBox(height: 24),
-                LinearProgressIndicator(
-                  value: 1,
-                  minHeight: 8,
-                  borderRadius: BorderRadius.circular(20),
-                  backgroundColor: Colors.grey.shade300,
-                  color: primaryColor,
-                ),
-                const SizedBox(height: 32),
-                Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: cardColor,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: const Text(
-                    'أضيفي جهة اتصال للطوارئ وفعّلي الصلاحيات المهمة للتنبيهات والمساعدة.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontFamily: 'Cairo',
-                      color: textColor,
-                      height: 1.6,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 24),
+
                 buildField(
                   controller: emergencyContactController,
                   hint: 'رقم الطوارئ',
-                  icon: Icons.emergency,
                   keyboardType: TextInputType.phone,
                 ),
-                const SizedBox(height: 16),
+
+                const SizedBox(height: 18),
+
                 buildSwitchTile(
                   title: 'السماح بالموقع الجغرافي',
                   icon: Icons.location_on,
@@ -562,7 +655,9 @@ class _SignUpStep4State extends State<SignUpStep4> {
                     setState(() => allowLocation = value);
                   },
                 ),
-                const SizedBox(height: 16),
+
+                const SizedBox(height: 18),
+
                 buildSwitchTile(
                   title: 'السماح بالإشعارات',
                   icon: Icons.notifications_active,
@@ -571,67 +666,51 @@ class _SignUpStep4State extends State<SignUpStep4> {
                     setState(() => allowNotifications = value);
                   },
                 ),
-                const SizedBox(height: 16),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: cardColor,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: CheckboxListTile(
-                    value: privacyAccepted,
-                    activeColor: successColor,
-                    onChanged: (value) {
-                      setState(() => privacyAccepted = value ?? false);
-                    },
-                    controlAffinity: ListTileControlAffinity.leading,
-                    title: const Text(
-                      'أوافق على سياسة الخصوصية',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontFamily: 'Cairo',
-                        color: textColor,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                ),
+
+                const SizedBox(height: 18),
+
+                buildPrivacyCard(),
+
                 const SizedBox(height: 40),
+
                 SizedBox(
-                  height: 56,
+                  height: 62,
                   child: ElevatedButton.icon(
                     onPressed: isLoading ? null : createAccount,
                     icon: isLoading
                         ? const SizedBox(
-                            width: 22,
-                            height: 22,
+                            width: 24,
+                            height: 24,
                             child: CircularProgressIndicator(
                               strokeWidth: 2.5,
                               color: Colors.white,
                             ),
                           )
-                        : const Icon(Icons.check_circle, color: Colors.white),
+                        : const Icon(
+                            Icons.check_circle,
+                            color: Colors.white,
+                            size: 28,
+                          ),
                     label: Text(
                       isLoading ? 'جاري إنشاء الحساب' : 'إنهاء التسجيل',
                       style: const TextStyle(
-                        fontSize: 18,
+                        fontSize: 22,
                         fontFamily: 'Cairo',
-                        fontWeight: FontWeight.bold,
+                        fontWeight: FontWeight.w800,
                         color: Colors.white,
                       ),
                     ),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: primaryColor,
+                      elevation: 2,
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
+                        borderRadius: BorderRadius.circular(18),
                       ),
                     ),
                   ),
                 ),
-                const SizedBox(height: 24),
+
+                const SizedBox(height: 28),
               ],
             ),
           ),

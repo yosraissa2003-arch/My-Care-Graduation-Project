@@ -30,11 +30,15 @@ class SignUpStep3 extends StatefulWidget {
 }
 
 class _SignUpStep3State extends State<SignUpStep3> {
-  static const Color primaryColor = Color(0xFF1E3A5F);
-  static const Color backgroundColor = Color(0xFFF7F8FA);
-  static const Color cardColor = Colors.white;
-  static const Color textColor = Color(0xFF1F2937);
-  static const Color secondaryTextColor = Color(0xFF4B5563);
+  static const Color primaryColor = Color(0xFF1F4168);
+  static const Color backgroundColor = Color(0xFFF7F9FC);
+  static const Color cardColor = Color(0xFFFFFFFF);
+  static const Color textColor = Color(0xFF111827);
+  static const Color secondaryTextColor = Color(0xFF374151);
+  static const Color hintColor = Color(0xFF6B7280);
+  static const Color borderColor = Color(0xFFC9D6E2);
+  static const Color selectedCardColor = Color(0xFFEFF4FB);
+
   static const Color warningColor = Color(0xFFED6C02);
   static const Color successColor = Color(0xFF2E7D32);
 
@@ -42,7 +46,6 @@ class _SignUpStep3State extends State<SignUpStep3> {
   String? smokingStatus;
 
   bool remindersEnabled = true;
-  bool wearableEnabled = false;
 
   final otherDiseaseController = TextEditingController();
   final diseaseSinceController = TextEditingController();
@@ -193,14 +196,15 @@ class _SignUpStep3State extends State<SignUpStep3> {
         backgroundColor: color,
         behavior: SnackBarBehavior.floating,
         margin: const EdgeInsets.all(20),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
         content: Text(
           message,
           textAlign: TextAlign.right,
           style: const TextStyle(
             fontSize: 18,
             fontFamily: 'Cairo',
-            fontWeight: FontWeight.bold,
+            fontWeight: FontWeight.w700,
+            color: Colors.white,
           ),
         ),
       ),
@@ -215,7 +219,7 @@ class _SignUpStep3State extends State<SignUpStep3> {
       initialDate: now,
       firstDate: DateTime(1900),
       lastDate: now,
-      helpText: 'اختاري تاريخ بداية المرض',
+      helpText: 'اختر تاريخ بداية المرض',
       cancelText: 'إلغاء',
       confirmText: 'اختيار',
       fieldLabelText: 'تاريخ بداية المرض',
@@ -248,66 +252,77 @@ class _SignUpStep3State extends State<SignUpStep3> {
 
   String joinValues(Set<String> values, TextEditingController otherController) {
     final result = values.toList();
+
     if (values.contains("أخرى") && otherController.text.trim().isNotEmpty) {
       result.remove("أخرى");
       result.add(otherController.text.trim());
     }
+
     return result.join(", ");
   }
 
   void goNext() {
     if (widget.role == "مريض") {
       if (selectedDiseases.isEmpty) {
-        showMessage("اختاري الأمراض المزمنة أو لا يوجد", color: warningColor);
+        showMessage(
+          "يرجى اختيار الأمراض المزمنة أو لا يوجد",
+          color: warningColor,
+        );
         return;
       }
 
       if (selectedDiseases.contains("أخرى") &&
           otherDiseaseController.text.trim().isEmpty) {
-        showMessage("اكتبي المرض غير الموجود", color: warningColor);
+        showMessage("يرجى إدخال المرض غير الموجود", color: warningColor);
         return;
       }
 
       if (selectedMedicines.isEmpty) {
-        showMessage("اختاري الأدوية المزمنة أو لا يوجد", color: warningColor);
+        showMessage(
+          "يرجى اختيار الأدوية المزمنة أو لا يوجد",
+          color: warningColor,
+        );
         return;
       }
 
       if (selectedMedicines.contains("أخرى") &&
           otherMedicineController.text.trim().isEmpty) {
-        showMessage("اكتبي الدواء غير الموجود", color: warningColor);
+        showMessage("يرجى إدخال الدواء غير الموجود", color: warningColor);
         return;
       }
 
       if (selectedAllergies.isEmpty) {
-        showMessage("اختاري الحساسية أو لا يوجد", color: warningColor);
+        showMessage("يرجى اختيار الحساسية أو لا يوجد", color: warningColor);
         return;
       }
 
       if (selectedAllergies.contains("أخرى") &&
           otherAllergyController.text.trim().isEmpty) {
-        showMessage("اكتبي الحساسية غير الموجودة", color: warningColor);
+        showMessage("يرجى إدخال الحساسية غير الموجودة", color: warningColor);
         return;
       }
 
       if (selectedSurgeries.isEmpty) {
-        showMessage("اختاري العمليات السابقة أو لا يوجد", color: warningColor);
+        showMessage(
+          "يرجى اختيار العمليات السابقة أو لا يوجد",
+          color: warningColor,
+        );
         return;
       }
 
       if (selectedSurgeries.contains("أخرى") &&
           otherSurgeryController.text.trim().isEmpty) {
-        showMessage("اكتبي العملية غير الموجودة", color: warningColor);
+        showMessage("يرجى إدخال العملية غير الموجودة", color: warningColor);
         return;
       }
 
       if (bloodType == null) {
-        showMessage("اختاري فصيلة الدم", color: warningColor);
+        showMessage("يرجى اختيار فصيلة الدم", color: warningColor);
         return;
       }
 
       if (smokingStatus == null) {
-        showMessage("اختاري حالة التدخين", color: warningColor);
+        showMessage("يرجى اختيار حالة التدخين", color: warningColor);
         return;
       }
     }
@@ -343,7 +358,7 @@ class _SignUpStep3State extends State<SignUpStep3> {
           sugar: sugarController.text.trim(),
           heartRate: heartRateController.text.trim(),
           remindersEnabled: remindersEnabled,
-          wearableEnabled: wearableEnabled,
+          wearableEnabled: false,
         ),
       ),
     );
@@ -356,17 +371,26 @@ class _SignUpStep3State extends State<SignUpStep3> {
     return InputDecoration(
       hintText: hint,
       hintStyle: const TextStyle(
-        fontSize: 17,
+        fontSize: 19,
         fontFamily: 'Cairo',
-        color: secondaryTextColor,
+        color: hintColor,
+        fontWeight: FontWeight.w500,
       ),
-      prefixIcon: Icon(icon, color: primaryColor),
+      prefixIcon: Icon(icon, color: primaryColor, size: 28),
       filled: true,
       fillColor: cardColor,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(18),
+        borderSide: const BorderSide(color: borderColor, width: 1.3),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(18),
+        borderSide: const BorderSide(color: primaryColor, width: 2),
+      ),
       border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(16),
-        borderSide: BorderSide.none,
+        borderRadius: BorderRadius.circular(18),
+        borderSide: const BorderSide(color: borderColor, width: 1.3),
       ),
     );
   }
@@ -378,14 +402,16 @@ class _SignUpStep3State extends State<SignUpStep3> {
     TextInputType keyboardType = TextInputType.text,
   }) {
     return SizedBox(
-      height: 56,
+      height: 62,
       child: TextField(
         controller: controller,
         keyboardType: keyboardType,
+        textInputAction: TextInputAction.next,
         style: const TextStyle(
-          fontSize: 18,
+          fontSize: 20,
           fontFamily: 'Cairo',
           color: textColor,
+          fontWeight: FontWeight.w600,
         ),
         decoration: inputDecoration(hint: hint, icon: icon),
       ),
@@ -399,20 +425,70 @@ class _SignUpStep3State extends State<SignUpStep3> {
     required VoidCallback onTap,
   }) {
     return SizedBox(
-      height: 56,
+      height: 62,
       child: TextField(
         controller: controller,
         readOnly: true,
         onTap: onTap,
+        textAlign: TextAlign.right,
         style: const TextStyle(
-          fontSize: 18,
+          fontSize: 20,
           fontFamily: 'Cairo',
           color: textColor,
+          fontWeight: FontWeight.w600,
         ),
-        decoration: inputDecoration(hint: hint, icon: icon).copyWith(
-          suffixIcon: const Icon(Icons.calendar_month, color: primaryColor),
-        ),
+        decoration: inputDecoration(hint: hint, icon: icon),
       ),
+    );
+  }
+
+  Widget buildPageTitle() {
+    return const Text(
+      'الملف الطبي',
+      textAlign: TextAlign.center,
+      style: TextStyle(
+        fontSize: 34,
+        fontFamily: 'Cairo',
+        fontWeight: FontWeight.w900,
+        color: primaryColor,
+        height: 1.3,
+      ),
+    );
+  }
+
+  Widget buildStepIndicator() {
+    return Column(
+      children: [
+        Center(
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+            decoration: BoxDecoration(
+              color: cardColor,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: borderColor, width: 1),
+            ),
+            child: const Text(
+              'الخطوة 3 من 5',
+              style: TextStyle(
+                fontSize: 18,
+                fontFamily: 'Cairo',
+                color: secondaryTextColor,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: const LinearProgressIndicator(
+            value: 0.60,
+            minHeight: 10,
+            backgroundColor: Color(0xFFE5E7EB),
+            valueColor: AlwaysStoppedAnimation<Color>(primaryColor),
+          ),
+        ),
+      ],
     );
   }
 
@@ -425,17 +501,25 @@ class _SignUpStep3State extends State<SignUpStep3> {
   }) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(20),
+      borderRadius: BorderRadius.circular(24),
       child: Container(
-        padding: const EdgeInsets.all(18),
+        padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
           color: cardColor,
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: borderColor, width: 1.2),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.035),
+              blurRadius: 10,
+              offset: const Offset(0, 3),
+            ),
+          ],
         ),
         child: Row(
           children: [
-            Icon(icon, color: primaryColor, size: 32),
-            const SizedBox(width: 14),
+            Icon(icon, color: primaryColor, size: 34),
+            const SizedBox(width: 16),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -444,10 +528,11 @@ class _SignUpStep3State extends State<SignUpStep3> {
                     title,
                     textAlign: TextAlign.right,
                     style: const TextStyle(
-                      fontSize: 19,
+                      fontSize: 23,
                       fontFamily: 'Cairo',
-                      fontWeight: FontWeight.bold,
+                      fontWeight: FontWeight.w900,
                       color: textColor,
+                      height: 1.4,
                     ),
                   ),
                   const SizedBox(height: 4),
@@ -455,10 +540,13 @@ class _SignUpStep3State extends State<SignUpStep3> {
                     selectedValues.isEmpty
                         ? subtitle
                         : "${selectedValues.length} عناصر مختارة",
+                    textAlign: TextAlign.right,
                     style: const TextStyle(
-                      fontSize: 15,
+                      fontSize: 18,
                       fontFamily: 'Cairo',
+                      fontWeight: FontWeight.w600,
                       color: secondaryTextColor,
+                      height: 1.5,
                     ),
                   ),
                 ],
@@ -467,7 +555,7 @@ class _SignUpStep3State extends State<SignUpStep3> {
             const Icon(
               Icons.arrow_forward_ios,
               color: secondaryTextColor,
-              size: 18,
+              size: 22,
             ),
           ],
         ),
@@ -504,10 +592,11 @@ class _SignUpStep3State extends State<SignUpStep3> {
                       children: [
                         Text(
                           title,
+                          textAlign: TextAlign.center,
                           style: const TextStyle(
-                            fontSize: 22,
+                            fontSize: 24,
                             fontFamily: 'Cairo',
-                            fontWeight: FontWeight.bold,
+                            fontWeight: FontWeight.w900,
                             color: primaryColor,
                           ),
                         ),
@@ -525,6 +614,12 @@ class _SignUpStep3State extends State<SignUpStep3> {
                                 decoration: BoxDecoration(
                                   color: cardColor,
                                   borderRadius: BorderRadius.circular(16),
+                                  border: Border.all(
+                                    color: selected
+                                        ? primaryColor
+                                        : borderColor,
+                                    width: selected ? 1.8 : 1,
+                                  ),
                                 ),
                                 child: CheckboxListTile(
                                   value: selected,
@@ -534,9 +629,9 @@ class _SignUpStep3State extends State<SignUpStep3> {
                                   title: Text(
                                     item,
                                     style: const TextStyle(
-                                      fontSize: 18,
+                                      fontSize: 20,
                                       fontFamily: 'Cairo',
-                                      fontWeight: FontWeight.w600,
+                                      fontWeight: FontWeight.w700,
                                       color: textColor,
                                     ),
                                   ),
@@ -567,13 +662,13 @@ class _SignUpStep3State extends State<SignUpStep3> {
                           const SizedBox(height: 12),
                           buildField(
                             controller: otherController,
-                            hint: 'اكتبي هنا',
+                            hint: 'أدخل هنا',
                             icon: Icons.edit,
                           ),
                         ],
                         const SizedBox(height: 16),
                         SizedBox(
-                          height: 54,
+                          height: 58,
                           width: double.infinity,
                           child: ElevatedButton(
                             onPressed: () {
@@ -587,15 +682,15 @@ class _SignUpStep3State extends State<SignUpStep3> {
                             style: ElevatedButton.styleFrom(
                               backgroundColor: primaryColor,
                               shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(16),
+                                borderRadius: BorderRadius.circular(18),
                               ),
                             ),
                             child: const Text(
                               'حفظ الاختيارات',
                               style: TextStyle(
-                                fontSize: 18,
+                                fontSize: 20,
                                 fontFamily: 'Cairo',
-                                fontWeight: FontWeight.bold,
+                                fontWeight: FontWeight.w800,
                                 color: Colors.white,
                               ),
                             ),
@@ -615,12 +710,29 @@ class _SignUpStep3State extends State<SignUpStep3> {
 
   Widget buildSmallCard({required List<Widget> children}) {
     return Container(
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: cardColor,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: borderColor, width: 1.2),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.035),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
       ),
       child: Column(children: children),
+    );
+  }
+
+  TextStyle get dropdownTextStyle {
+    return const TextStyle(
+      fontSize: 20,
+      fontFamily: 'Cairo',
+      color: textColor,
+      fontWeight: FontWeight.w600,
     );
   }
 
@@ -674,10 +786,10 @@ class _SignUpStep3State extends State<SignUpStep3> {
           child: Text(
             isDoctor ? "جاري تجهيز بيانات الطبيب..." : "جاري المتابعة...",
             style: const TextStyle(
-              fontSize: 18,
+              fontSize: 20,
               fontFamily: 'Cairo',
               color: primaryColor,
-              fontWeight: FontWeight.bold,
+              fontWeight: FontWeight.w800,
             ),
           ),
         ),
@@ -690,55 +802,23 @@ class _SignUpStep3State extends State<SignUpStep3> {
         backgroundColor: backgroundColor,
         body: SafeArea(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.all(20),
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const SizedBox(height: 16),
-                const Text(
-                  'رعايتي ❤️',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 28,
-                    fontFamily: 'Cairo',
-                    fontWeight: FontWeight.bold,
-                    color: textColor,
-                  ),
-                ),
                 const SizedBox(height: 8),
-                const Text(
-                  'الملف الطبي',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 22,
-                    fontFamily: 'Cairo',
-                    fontWeight: FontWeight.bold,
-                    color: primaryColor,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                const Text(
-                  'الخطوة 3 من 5',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontFamily: 'Cairo',
-                    color: secondaryTextColor,
-                  ),
-                ),
-                const SizedBox(height: 24),
-                LinearProgressIndicator(
-                  value: 0.6,
-                  minHeight: 8,
-                  borderRadius: BorderRadius.circular(20),
-                  backgroundColor: Colors.grey.shade300,
-                  color: primaryColor,
-                ),
-                const SizedBox(height: 24),
+
+                buildPageTitle(),
+
+                const SizedBox(height: 20),
+
+                buildStepIndicator(),
+
+                const SizedBox(height: 28),
 
                 buildPickerCard(
                   title: 'الأمراض المزمنة',
-                  subtitle: 'اختاري الأمراض من قائمة مرتبة',
+                  subtitle: 'اختر الأمراض من قائمة مرتبة',
                   icon: Icons.medical_services,
                   selectedValues: selectedDiseases,
                   onTap: () => openSelectionSheet(
@@ -749,7 +829,7 @@ class _SignUpStep3State extends State<SignUpStep3> {
                   ),
                 ),
 
-                const SizedBox(height: 14),
+                const SizedBox(height: 16),
 
                 buildDateField(
                   controller: diseaseSinceController,
@@ -758,11 +838,11 @@ class _SignUpStep3State extends State<SignUpStep3> {
                   onTap: pickDiseaseSinceDate,
                 ),
 
-                const SizedBox(height: 14),
+                const SizedBox(height: 16),
 
                 buildPickerCard(
                   title: 'الأدوية المزمنة / اليومية',
-                  subtitle: 'اختاري الأدوية المستخدمة يوميًا',
+                  subtitle: 'اختر الأدوية المستخدمة يوميًا',
                   icon: Icons.medication,
                   selectedValues: selectedMedicines,
                   onTap: () => openSelectionSheet(
@@ -773,11 +853,11 @@ class _SignUpStep3State extends State<SignUpStep3> {
                   ),
                 ),
 
-                const SizedBox(height: 14),
+                const SizedBox(height: 16),
 
                 buildPickerCard(
                   title: 'الحساسية',
-                  subtitle: 'اختاري نوع الحساسية إن وجدت',
+                  subtitle: 'اختر نوع الحساسية إن وجدت',
                   icon: Icons.warning,
                   selectedValues: selectedAllergies,
                   onTap: () => openSelectionSheet(
@@ -788,7 +868,7 @@ class _SignUpStep3State extends State<SignUpStep3> {
                   ),
                 ),
 
-                const SizedBox(height: 14),
+                const SizedBox(height: 16),
 
                 buildPickerCard(
                   title: 'نوع رد فعل الحساسية',
@@ -796,17 +876,17 @@ class _SignUpStep3State extends State<SignUpStep3> {
                   icon: Icons.info_outline,
                   selectedValues: selectedAllergyTypes,
                   onTap: () => openSelectionSheet(
-                    title: 'اختيار نوع الحساسية',
+                    title: 'اختيار نوع رد فعل الحساسية',
                     items: allergyTypes,
                     selectedValues: selectedAllergyTypes,
                   ),
                 ),
 
-                const SizedBox(height: 14),
+                const SizedBox(height: 16),
 
                 buildPickerCard(
                   title: 'العمليات السابقة',
-                  subtitle: 'اختاري العمليات السابقة أو لا يوجد',
+                  subtitle: 'اختر العمليات السابقة أو لا يوجد',
                   icon: Icons.local_hospital,
                   selectedValues: selectedSurgeries,
                   onTap: () => openSelectionSheet(
@@ -821,55 +901,68 @@ class _SignUpStep3State extends State<SignUpStep3> {
 
                 buildSmallCard(
                   children: [
-                    DropdownButtonFormField<String>(
-                      initialValue: bloodType,
-                      decoration: inputDecoration(
-                        hint: 'فصيلة الدم',
-                        icon: Icons.bloodtype,
+                    SizedBox(
+                      height: 62,
+                      child: DropdownButtonFormField<String>(
+                        initialValue: bloodType,
+                        decoration: inputDecoration(
+                          hint: 'فصيلة الدم',
+                          icon: Icons.bloodtype,
+                        ),
+                        style: dropdownTextStyle,
+                        icon: const Icon(
+                          Icons.keyboard_arrow_down,
+                          color: primaryColor,
+                          size: 30,
+                        ),
+                        dropdownColor: cardColor,
+                        items: bloodTypes
+                            .map(
+                              (type) => DropdownMenuItem(
+                                value: type,
+                                child: Text(type, style: dropdownTextStyle),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: (value) {
+                          setState(() => bloodType = value);
+                        },
                       ),
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontFamily: 'Cairo',
-                        color: textColor,
-                      ),
-                      items: bloodTypes
-                          .map(
-                            (type) => DropdownMenuItem(
-                              value: type,
-                              child: Text(type),
-                            ),
-                          )
-                          .toList(),
-                      onChanged: (value) {
-                        setState(() => bloodType = value);
-                      },
                     ),
-                    const SizedBox(height: 14),
-                    DropdownButtonFormField<String>(
-                      initialValue: smokingStatus,
-                      decoration: inputDecoration(
-                        hint: 'حالة التدخين',
-                        icon: Icons.smoking_rooms,
+
+                    const SizedBox(height: 16),
+
+                    SizedBox(
+                      height: 62,
+                      child: DropdownButtonFormField<String>(
+                        initialValue: smokingStatus,
+                        decoration: inputDecoration(
+                          hint: 'حالة التدخين',
+                          icon: Icons.smoking_rooms,
+                        ),
+                        style: dropdownTextStyle,
+                        icon: const Icon(
+                          Icons.keyboard_arrow_down,
+                          color: primaryColor,
+                          size: 30,
+                        ),
+                        dropdownColor: cardColor,
+                        items: ['غير مدخن', 'مدخن', 'مدخن سابق']
+                            .map(
+                              (status) => DropdownMenuItem(
+                                value: status,
+                                child: Text(status, style: dropdownTextStyle),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: (value) {
+                          setState(() => smokingStatus = value);
+                        },
                       ),
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontFamily: 'Cairo',
-                        color: textColor,
-                      ),
-                      items: ['غير مدخن', 'مدخن', 'مدخن سابق']
-                          .map(
-                            (status) => DropdownMenuItem(
-                              value: status,
-                              child: Text(status),
-                            ),
-                          )
-                          .toList(),
-                      onChanged: (value) {
-                        setState(() => smokingStatus = value);
-                      },
                     ),
+
                     if (smokingStatus == "مدخن") ...[
-                      const SizedBox(height: 14),
+                      const SizedBox(height: 16),
                       buildField(
                         controller: cigarettesPerDayController,
                         hint: 'عدد السجائر يوميًا',
@@ -889,14 +982,14 @@ class _SignUpStep3State extends State<SignUpStep3> {
                       hint: 'ضغط الدم مثال: 120/80',
                       icon: Icons.favorite,
                     ),
-                    const SizedBox(height: 14),
+                    const SizedBox(height: 16),
                     buildField(
                       controller: sugarController,
                       hint: 'مستوى السكر',
                       icon: Icons.water_drop,
                       keyboardType: TextInputType.number,
                     ),
-                    const SizedBox(height: 14),
+                    const SizedBox(height: 16),
                     buildField(
                       controller: heartRateController,
                       hint: 'نبض القلب',
@@ -916,28 +1009,14 @@ class _SignUpStep3State extends State<SignUpStep3> {
                       title: const Text(
                         'تفعيل تذكيرات الأدوية',
                         style: TextStyle(
-                          fontSize: 18,
+                          fontSize: 21,
                           fontFamily: 'Cairo',
+                          fontWeight: FontWeight.w800,
                           color: textColor,
                         ),
                       ),
                       onChanged: (value) {
                         setState(() => remindersEnabled = value);
-                      },
-                    ),
-                    SwitchListTile(
-                      value: wearableEnabled,
-                      activeThumbColor: successColor,
-                      title: const Text(
-                        'استخدام بيانات ساعة ذكية لاحقًا',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontFamily: 'Cairo',
-                          color: textColor,
-                        ),
-                      ),
-                      onChanged: (value) {
-                        setState(() => wearableEnabled = value);
                       },
                     ),
                   ],
@@ -946,29 +1025,34 @@ class _SignUpStep3State extends State<SignUpStep3> {
                 const SizedBox(height: 40),
 
                 SizedBox(
-                  height: 56,
+                  height: 62,
                   child: ElevatedButton.icon(
                     onPressed: goNext,
-                    icon: const Icon(Icons.arrow_forward, color: Colors.white),
+                    icon: const Icon(
+                      Icons.arrow_forward,
+                      color: Colors.white,
+                      size: 28,
+                    ),
                     label: const Text(
                       'التالي',
                       style: TextStyle(
-                        fontSize: 18,
+                        fontSize: 22,
                         fontFamily: 'Cairo',
-                        fontWeight: FontWeight.bold,
+                        fontWeight: FontWeight.w800,
                         color: Colors.white,
                       ),
                     ),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: primaryColor,
+                      elevation: 2,
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
+                        borderRadius: BorderRadius.circular(18),
                       ),
                     ),
                   ),
                 ),
 
-                const SizedBox(height: 24),
+                const SizedBox(height: 28),
               ],
             ),
           ),

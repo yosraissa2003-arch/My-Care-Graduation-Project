@@ -12,9 +12,10 @@ class NotificationsScreen extends StatefulWidget {
 
 class _NotificationsScreenState extends State<NotificationsScreen> {
   static const Color primaryColor = Color(0xFF1E3A5F);
-  static const Color warningColor = Color(0xFFED6C02);
+  static const Color warningColor = Color(0xFFB42318);
   static const Color dangerColor = Color(0xFFD32F2F);
-  static const Color backgroundColor = Color(0xFFF7F8FA);
+  static const Color backgroundColor = Color(0xFFF7F9FC);
+  static const Color borderColor = Color(0xFFE5E7EB);
 
   final FlutterTts _tts = FlutterTts();
 
@@ -55,6 +56,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     Future<void> addQuery(Query<Map<String, dynamic>> query) async {
       try {
         final snap = await query.get();
+
         for (final doc in snap.docs) {
           result[doc.id] = doc;
         }
@@ -63,17 +65,18 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       }
     }
 
-    // للمريض الحالي فقط: تنبيهات تخص حسابه أو هو المستلم لها.
     await addQuery(
       FirebaseFirestore.instance
           .collection('notifications')
           .where('userId', isEqualTo: uid),
     );
+
     await addQuery(
       FirebaseFirestore.instance
           .collection('notifications')
           .where('patientId', isEqualTo: uid),
     );
+
     await addQuery(
       FirebaseFirestore.instance
           .collection('notifications')
@@ -81,13 +84,18 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     );
 
     final docs = result.values.toList();
+
     docs.sort((a, b) {
       final aTime = a.data()['createdAt'];
       final bTime = b.data()['createdAt'];
-      if (aTime is Timestamp && bTime is Timestamp)
+
+      if (aTime is Timestamp && bTime is Timestamp) {
         return bTime.compareTo(aTime);
+      }
+
       return 0;
     });
+
     return docs;
   }
 
@@ -127,7 +135,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       case 'task':
         return primaryColor;
       case 'mood':
-        return warningColor;
+        return primaryColor;
       default:
         return primaryColor;
     }
@@ -138,7 +146,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       case 'medication':
         return 'تنبيه دواء';
       case 'warning':
-        return 'تنبيه صحي / AI';
+        return 'تنبيه صحي مهم';
       case 'allergy_warning':
         return 'تحذير حساسية دواء';
       case 'sos':
@@ -156,18 +164,24 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
   String formatDate(dynamic timestamp) {
     if (timestamp == null || timestamp is! Timestamp) return '';
+
     final date = timestamp.toDate();
+
     return '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
   }
 
   String formatTime(dynamic timestamp) {
     if (timestamp == null || timestamp is! Timestamp) return '';
+
     final DateTime date = timestamp.toDate();
+
     int hour = date.hour;
     final int minute = date.minute;
     final String period = hour >= 12 ? 'مساءً' : 'صباحًا';
+
     if (hour > 12) hour -= 12;
     if (hour == 0) hour = 12;
+
     return '${hour.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')} $period';
   }
 
@@ -181,6 +195,62 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     }
   }
 
+  Widget _introCard(int count) {
+    return const Text(
+      'تابع هنا تنبيهات الأدوية، التنبيهات الصحية، والطوارئ المهمة.',
+      textAlign: TextAlign.right,
+      textDirection: TextDirection.rtl,
+      style: TextStyle(
+        fontSize: 19,
+        fontWeight: FontWeight.w800,
+        color: Colors.black,
+        fontFamily: 'Cairo',
+        height: 1.6,
+      ),
+    );
+  }
+
+  Widget _emptyNotificationsCard() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: borderColor, width: 1.2),
+      ),
+      child: const Text(
+        'لا توجد تنبيهات حاليًا',
+        textAlign: TextAlign.center,
+        textDirection: TextDirection.rtl,
+        style: TextStyle(
+          fontSize: 22,
+          fontWeight: FontWeight.w900,
+          color: Colors.black,
+          fontFamily: 'Cairo',
+          height: 1.5,
+        ),
+      ),
+    );
+  }
+
+  String cleanAiText(String text) {
+    return text
+        .replaceAll('بواسطة AI', '')
+        .replaceAll('بواسطة Ai', '')
+        .replaceAll('بواسطة ai', '')
+        .replaceAll('بواسطة الذكاء الاصطناعي', '')
+        .replaceAll('بواسطة ذكاء اصطناعي', '')
+        .replaceAll('/ AI', '')
+        .replaceAll('AI', '')
+        .replaceAll('Ai', '')
+        .replaceAll('ai', '')
+        .replaceAll('ذكاء اصطناعي', '')
+        .replaceAll('الذكاء الاصطناعي', '')
+        .replaceAll('بواسطة', '')
+        .trim();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Directionality(
@@ -191,13 +261,24 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           backgroundColor: backgroundColor,
           elevation: 0,
           centerTitle: true,
+          automaticallyImplyLeading: false,
+          leading: IconButton(
+            onPressed: () => Navigator.pop(context),
+            icon: const Icon(
+              Icons.arrow_back_ios_new_rounded,
+              color: primaryColor,
+              size: 28,
+            ),
+          ),
           title: const Text(
             'التنبيهات',
+            textAlign: TextAlign.center,
             style: TextStyle(
-              fontSize: 28,
+              fontSize: 32,
               fontWeight: FontWeight.w900,
               color: Colors.black,
               fontFamily: 'Cairo',
+              height: 1.3,
             ),
           ),
         ),
@@ -214,22 +295,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               return const Center(
                 child: Text(
                   'حدث خطأ أثناء تحميل التنبيهات',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w900,
-                    color: Colors.black,
-                    fontFamily: 'Cairo',
-                  ),
-                ),
-              );
-            }
-
-            final notifications = snapshot.data ?? [];
-
-            if (notifications.isEmpty) {
-              return const Center(
-                child: Text(
-                  'لا توجد تنبيهات حاليًا',
+                  textAlign: TextAlign.center,
                   style: TextStyle(
                     fontSize: 22,
                     fontWeight: FontWeight.w900,
@@ -240,41 +306,75 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               );
             }
 
+            final notifications = snapshot.data ?? [];
+
             return RefreshIndicator(
               onRefresh: () async => setState(() {}),
-              child: ListView.separated(
+              child: ListView(
                 padding: const EdgeInsets.all(20),
-                itemCount: notifications.length,
-                separatorBuilder: (_, _) => const SizedBox(height: 16),
-                itemBuilder: (context, index) {
-                  final data = notifications[index].data();
-                  final String type = (data['type'] ?? 'general').toString();
-                  final createdAt = data['createdAt'];
+                children: [
+                  _introCard(notifications.length),
 
-                  return InkWell(
-                    borderRadius: BorderRadius.circular(22),
-                    onTap: () => openRelatedScreen(context, type),
-                    child: NotificationCard(
-                      title: (data['title'] ?? 'تنبيه').toString(),
-                      message: (data['message'] ?? '').toString(),
-                      typeLabel: getTypeLabel(type),
-                      date: formatDate(createdAt),
-                      clock:
-                          (data['time'] ?? '').toString().isNotEmpty &&
-                              data['time'].toString() != 'تنبيه'
-                          ? data['time'].toString()
-                          : formatTime(createdAt),
-                      type: type,
-                      icon: getIcon(type),
-                      color: getColor(type),
-                      onSpeak: () => speakNotification(
-                        title: (data['title'] ?? 'تنبيه').toString(),
-                        message: (data['message'] ?? '').toString(),
-                        typeLabel: getTypeLabel(type),
-                      ),
-                    ),
-                  );
-                },
+                  const SizedBox(height: 18),
+
+                  if (notifications.isEmpty)
+                    _emptyNotificationsCard()
+                  else
+                    ...notifications.map((notification) {
+                      final data = notification.data();
+
+                      final String type = (data['type'] ?? 'general')
+                          .toString();
+                      final createdAt = data['createdAt'];
+
+                      final String title = cleanAiText(
+                        (data['title'] ?? 'تنبيه').toString(),
+                      );
+
+                      final String message = cleanAiText(
+                        (data['message'] ?? '').toString(),
+                      );
+
+                      final String rawTime = (data['time'] ?? '')
+                          .toString()
+                          .trim();
+
+                      final bool invalidTime =
+                          rawTime.isEmpty ||
+                          rawTime == 'تنبيه' ||
+                          rawTime == 'طوارئ' ||
+                          rawTime == 'تحذير' ||
+                          rawTime == 'SOS' ||
+                          rawTime.toLowerCase() == 'sos';
+
+                      final String clock = invalidTime
+                          ? formatTime(createdAt)
+                          : rawTime;
+
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 16),
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(24),
+                          onTap: () => openRelatedScreen(context, type),
+                          child: NotificationCard(
+                            title: title,
+                            message: message,
+                            typeLabel: getTypeLabel(type),
+                            date: formatDate(createdAt),
+                            clock: clock,
+                            type: type,
+                            icon: getIcon(type),
+                            color: getColor(type),
+                            onSpeak: () => speakNotification(
+                              title: title,
+                              message: message,
+                              typeLabel: getTypeLabel(type),
+                            ),
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                ],
               ),
             );
           },
@@ -308,120 +408,171 @@ class NotificationCard extends StatelessWidget {
     this.onSpeak,
   });
 
+  bool get isEmergency => type == 'sos' || type == 'allergy_warning';
+
   @override
   Widget build(BuildContext context) {
+    final Color cardColor = isEmergency
+        ? const Color(0xFFFFF1F1)
+        : Colors.white;
+
+    final Color miniBgColor = isEmergency
+        ? const Color(0xFFFFE8E8)
+        : const Color(0xFFF7F9FC);
+
+    final Color infoColor = isEmergency ? color : const Color(0xFF1E3A5F);
+
     return Container(
+      width: double.infinity,
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: const Color(0xFFE5E7EB), width: 1.3),
+        color: cardColor,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(
+          color: isEmergency
+              ? color.withOpacity(0.25)
+              : const Color(0xFFE5E7EB),
+          width: 1.2,
+        ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 12,
-            offset: const Offset(0, 5),
+            color: Colors.black.withOpacity(0.035),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
           ),
         ],
       ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Container(
-            width: 62,
-            height: 62,
-            decoration: BoxDecoration(
-              color: color.withOpacity(0.12),
-              borderRadius: BorderRadius.circular(18),
-            ),
-            child: Icon(icon, color: color, size: 32),
-          ),
-          const SizedBox(width: 10),
-          IconButton(
-            tooltip: 'قراءة التنبيه صوتياً',
-            onPressed: onSpeak,
-            icon: Icon(Icons.volume_up_rounded, color: color, size: 30),
-          ),
-          const SizedBox(width: 6),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  typeLabel,
-                  textAlign: TextAlign.right,
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w900,
-                    color: color,
-                    fontFamily: 'Cairo',
-                  ),
-                ),
-                const SizedBox(height: 5),
-                Text(
-                  title,
-                  textAlign: TextAlign.right,
-                  style: const TextStyle(
-                    fontSize: 21,
-                    fontWeight: FontWeight.w900,
-                    color: Colors.black,
-                    fontFamily: 'Cairo',
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  message,
-                  textAlign: TextAlign.right,
-                  style: const TextStyle(
-                    fontSize: 17,
-                    fontWeight: FontWeight.w800,
-                    color: Colors.black,
-                    height: 1.5,
-                    fontFamily: 'Cairo',
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    _miniInfo(
-                      Icons.calendar_month_rounded,
-                      date.isEmpty ? 'بدون تاريخ' : date,
+          Row(
+            children: [
+              Expanded(
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 13,
+                      vertical: 7,
                     ),
-                    _miniInfo(
-                      Icons.access_time_rounded,
-                      clock.isEmpty ? 'بدون ساعة' : clock,
+                    decoration: BoxDecoration(
+                      color: color.withOpacity(0.10),
+                      borderRadius: BorderRadius.circular(14),
                     ),
-                  ],
+                    child: Text(
+                      typeLabel,
+                      textDirection: TextDirection.rtl,
+                      textAlign: TextAlign.right,
+                      maxLines: 1,
+                      style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w900,
+                        color: color,
+                        fontFamily: 'Cairo',
+                        height: 1.2,
+                      ),
+                    ),
+                  ),
                 ),
-              ],
+              ),
+
+              const SizedBox(width: 10),
+
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: color.withOpacity(0.10),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: IconButton(
+                  tooltip: 'قراءة التنبيه صوتياً',
+                  onPressed: onSpeak,
+                  icon: Icon(Icons.volume_up_rounded, color: color, size: 28),
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 14),
+
+          Text(
+            title,
+            textDirection: TextDirection.rtl,
+            textAlign: TextAlign.right,
+            style: const TextStyle(
+              fontSize: 26,
+              fontWeight: FontWeight.w900,
+              color: Colors.black,
+              fontFamily: 'Cairo',
+              height: 1.3,
             ),
+          ),
+
+          const SizedBox(height: 10),
+
+          Text(
+            message,
+            textDirection: TextDirection.rtl,
+            textAlign: TextAlign.right,
+            style: const TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.w800,
+              color: Colors.black,
+              height: 1.7,
+              fontFamily: 'Cairo',
+            ),
+          ),
+
+          const SizedBox(height: 16),
+
+          _miniInfo(
+            Icons.calendar_month_rounded,
+            "التاريخ: ${date.isEmpty ? 'بدون تاريخ' : date}",
+            miniBgColor,
+            infoColor,
+          ),
+
+          const SizedBox(height: 8),
+
+          _miniInfo(
+            Icons.access_time_rounded,
+            "الوقت: ${clock.isEmpty ? 'بدون وقت' : clock}",
+            miniBgColor,
+            infoColor,
           ),
         ],
       ),
     );
   }
 
-  Widget _miniInfo(IconData icon, String text) {
+  Widget _miniInfo(IconData icon, String text, Color bgColor, Color infoColor) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.08),
-        borderRadius: BorderRadius.circular(14),
+        color: bgColor,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE5E7EB), width: 1.1),
       ),
       child: Row(
-        mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 18, color: color),
-          const SizedBox(width: 5),
-          Text(
-            text,
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w900,
-              color: color,
-              fontFamily: 'Cairo',
+          Icon(icon, size: 23, color: infoColor),
+
+          const SizedBox(width: 8),
+
+          Expanded(
+            child: Text(
+              text,
+              textDirection: TextDirection.rtl,
+              textAlign: TextAlign.right,
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w900,
+                color: infoColor,
+                fontFamily: 'Cairo',
+                height: 1.3,
+              ),
             ),
           ),
         ],
